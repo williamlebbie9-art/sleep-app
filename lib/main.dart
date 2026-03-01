@@ -279,6 +279,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
+            const SizedBox(height: 8),
+            FutureBuilder<Duration?>(
+              future: StreakManager.getRecoveryTimeRemaining(),
+              builder: (context, snapshot) {
+                final remaining = snapshot.data;
+                if (remaining == null) {
+                  return const SizedBox.shrink();
+                }
+                final hours = remaining.inHours;
+                final minutes = remaining.inMinutes % 60;
+                return Text(
+                  '⏳ Streak recovery window: ${hours}h ${minutes}m left',
+                  style: const TextStyle(fontSize: 14, color: Colors.orange),
+                );
+              },
+            ),
             const SizedBox(height: 10),
             const Text(
               'Welcome to SleepLock 🌙',
@@ -333,18 +349,19 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () async {
                 final prefs = await SharedPreferences.getInstance();
                 final keys = prefs.getKeys().where(
-                  (k) => k.startsWith('photo_'),
+                  (k) => k.startsWith('photo_') || k.startsWith('vault_photo_'),
                 );
-                final List<String> photoPaths = keys
-                    .map((k) => prefs.getString(k))
-                    .whereType<String>()
-                    .toList();
+                final Map<String, String> photoEntries = {
+                  for (final key in keys)
+                    if (prefs.getString(key) != null)
+                      key: prefs.getString(key)!,
+                };
                 if (!context.mounted) return;
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) =>
-                        StreakGalleryScreen(photoPaths: photoPaths),
+                        StreakGalleryScreen(photoEntries: photoEntries),
                   ),
                 );
               },
@@ -364,7 +381,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
                 final prefs = await SharedPreferences.getInstance();
                 final newUnlockTime = selection.unlockTime;
-                final newStreak = streak + 1;
+                final newStreak =
+                    await StreakManager.recordSleepLockActivation();
                 await prefs.setInt('streak', newStreak);
                 await prefs.setInt(
                   'unlockTime',
