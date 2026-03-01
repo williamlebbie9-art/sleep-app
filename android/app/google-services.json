@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1062562913801",
+    "project_id": "sleeplock-20961",
+    "storage_bucket": "sleeplock-20961.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1062562913801:android:70fa7c72d8b14acd3622d8",
+        "android_client_info": {
+          "package_name": "com.sleeplock.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBRMxeblMZop9pvBZ9KVucYUcgr7rkO__M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
