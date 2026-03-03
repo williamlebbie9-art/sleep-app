@@ -4,15 +4,18 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
+import 'referral_service.dart';
+
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final ReferralService _referralService = ReferralService();
 
   User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  Future<UserCredential?> signInWithGoogle() async {
+  Future<UserCredential?> signInWithGoogle({String? referralCode}) async {
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return null;
@@ -28,7 +31,11 @@ class AuthService {
       final userCredential = await _auth.signInWithCredential(credential);
 
       if (userCredential.user != null) {
-        await _upsertUserProfile(userCredential.user!, provider: 'google');
+        await _upsertUserProfile(
+          userCredential.user!,
+          provider: 'google',
+          referralCode: referralCode,
+        );
       }
 
       // Link RevenueCat to Firebase user
@@ -42,7 +49,7 @@ class AuthService {
     }
   }
 
-  Future<UserCredential?> signInWithApple() async {
+  Future<UserCredential?> signInWithApple({String? referralCode}) async {
     try {
       final isAppleSignInAvailable = await SignInWithApple.isAvailable();
       if (!isAppleSignInAvailable) {
@@ -83,6 +90,7 @@ class AuthService {
           provider: 'apple',
           emailOverride: appleCredential.email,
           displayNameOverride: fullName,
+          referralCode: referralCode,
         );
       }
 
@@ -100,6 +108,7 @@ class AuthService {
   Future<UserCredential> signUpWithEmailAndPassword({
     required String email,
     required String password,
+    String? referralCode,
   }) async {
     final userCredential = await _auth.createUserWithEmailAndPassword(
       email: email,
@@ -108,6 +117,11 @@ class AuthService {
 
     if (userCredential.user != null) {
       await Purchases.logIn(userCredential.user!.uid);
+      await _upsertUserProfile(
+        userCredential.user!,
+        provider: 'email',
+        referralCode: referralCode,
+      );
     }
 
     return userCredential;
@@ -140,6 +154,7 @@ class AuthService {
     required String provider,
     String? emailOverride,
     String? displayNameOverride,
+    String? referralCode,
   }) async {
     final displayName =
         (displayNameOverride != null && displayNameOverride.trim().isNotEmpty)
@@ -168,5 +183,44 @@ class AuthService {
       ...data,
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+
+    await _applyReferralIfProvided(user: user, referralCode: referralCode);
+  }
+
+  Future<void> _applyReferralIfProvided({
+    required User user,
+    String? referralCode,
+  }) async {
+    final fallbackCode = await _referralService.getPendingReferralCode();
+    final normalized = (referralCode ?? fallbackCode)?.trim().toUpperCase();
+    if (normalized == null || normalized.isEmpty) {
+      return;
+    }
+
+    final userRef = _firestore.collection('users').doc(user.uid);
+    final userDoc = await userRef.get();
+    final existingCode = userDoc.data()?['referredByCreatorCode'] as String?;
+    if (existingCode != null && existingCode.trim().isNotEmpty) {
+      return;
+    }
+
+    final creatorUid = await _referralService.resolveCreatorUidByCode(
+      normalized,
+    );
+    if (creatorUid == null) {
+      throw Exception('Referral code is invalid.');
+    }
+    if (creatorUid == user.uid) {
+      throw Exception('You cannot use your own referral code.');
+    }
+
+    await userRef.set({
+      'referredByCreatorCode': normalized,
+      'referredByCreatorUid': creatorUid,
+      'referredAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    await _referralService.clearPendingReferralCode();
   }
 }

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:app_links/app_links.dart';
 import 'sound_selection.dart';
 import 'screens/activate_sleep_lock_screen.dart';
 import 'screens/lock_active_screen.dart';
@@ -20,11 +22,13 @@ import 'screens/support_screen.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
 import 'services/sleep_ai_service.dart';
+import 'services/referral_service.dart';
 import 'utils/streak_manager.dart';
 import 'utils/rating_dialog.dart';
 import 'models/story.dart';
 import 'screens/story_reader_screen.dart';
 import 'screens/streak_gallery_screen.dart';
+import 'screens/referral_hub_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -64,6 +68,10 @@ class InitialRouteScreen extends StatefulWidget {
 
 class _InitialRouteScreenState extends State<InitialRouteScreen> {
   final AuthService _authService = AuthService();
+  final ReferralService _referralService = ReferralService();
+  final AppLinks _appLinks = AppLinks();
+
+  StreamSubscription<Uri>? _linkSubscription;
   bool _isLoading = true;
   bool _isAuthenticated = false;
   bool _onboardingComplete = false;
@@ -73,7 +81,31 @@ class _InitialRouteScreenState extends State<InitialRouteScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeReferralLinkCapture();
     _checkAuthAndOnboarding();
+  }
+
+  @override
+  void dispose() {
+    _linkSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initializeReferralLinkCapture() async {
+    try {
+      final initialUri = await _appLinks.getInitialLink();
+      if (initialUri != null) {
+        await _referralService.captureReferralFromUri(initialUri);
+      }
+    } catch (_) {}
+
+    _linkSubscription = _appLinks.uriLinkStream.listen((uri) async {
+      final captured = await _referralService.captureReferralFromUri(uri);
+      if (!captured || !mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Referral code captured.')));
+    });
   }
 
   Future<void> _checkAuthAndOnboarding() async {
@@ -366,6 +398,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
               child: const Text('Streak Gallery'),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ReferralHubScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.group_add),
+              label: const Text('Referral Program'),
             ),
             const SizedBox(height: 20),
             ElevatedButton(

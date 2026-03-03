@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:sleeploock/services/auth_service.dart';
+import 'package:sleeploock/services/referral_service.dart';
 import 'signin_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -16,9 +17,11 @@ class _SignUpScreenState extends State<SignUpScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _authService = AuthService();
+  final _referralService = ReferralService();
 
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _referralCodeController = TextEditingController();
 
   bool _obscurePassword = true;
   bool _isLoading = false;
@@ -35,6 +38,19 @@ class _SignUpScreenState extends State<SignUpScreen>
     _glowAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
       CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
     );
+    _prefillReferralCode();
+  }
+
+  Future<void> _prefillReferralCode() async {
+    final pendingCode = await _referralService.getPendingReferralCode();
+    if (!mounted || pendingCode == null || pendingCode.isEmpty) {
+      return;
+    }
+    if (_referralCodeController.text.trim().isEmpty) {
+      setState(() {
+        _referralCodeController.text = pendingCode;
+      });
+    }
   }
 
   @override
@@ -42,6 +58,7 @@ class _SignUpScreenState extends State<SignUpScreen>
     _glowController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _referralCodeController.dispose();
     super.dispose();
   }
 
@@ -54,6 +71,7 @@ class _SignUpScreenState extends State<SignUpScreen>
       await _authService.signUpWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
+        referralCode: _referralCodeController.text.trim(),
       );
       if (!mounted) return;
       if (widget.onSignUpComplete != null) {
@@ -77,7 +95,9 @@ class _SignUpScreenState extends State<SignUpScreen>
   Future<void> _signInWithGoogle() async {
     setState(() => _isLoading = true);
     try {
-      await _authService.signInWithGoogle();
+      await _authService.signInWithGoogle(
+        referralCode: _referralCodeController.text.trim(),
+      );
       if (!mounted) return;
       if (widget.onSignUpComplete != null) {
         widget.onSignUpComplete!();
@@ -100,7 +120,9 @@ class _SignUpScreenState extends State<SignUpScreen>
   Future<void> _signInWithApple() async {
     setState(() => _isLoading = true);
     try {
-      await _authService.signInWithApple();
+      await _authService.signInWithApple(
+        referralCode: _referralCodeController.text.trim(),
+      );
       if (!mounted) return;
       if (widget.onSignUpComplete != null) {
         widget.onSignUpComplete!();
@@ -264,6 +286,14 @@ class _SignUpScreenState extends State<SignUpScreen>
                         }
                         return null;
                       },
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    _buildTextField(
+                      controller: _referralCodeController,
+                      hint: "Referral code (optional)",
+                      icon: Icons.card_giftcard,
                     ),
 
                     const SizedBox(height: 40),
