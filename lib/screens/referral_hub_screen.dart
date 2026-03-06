@@ -211,10 +211,7 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
               ],
             ),
           ),
-          Text(
-            amount,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
+          Text(amount, style: const TextStyle(fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -375,14 +372,18 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
                         final paidUsers = _toInt(
                           creator?['referredPaidUsersCount'],
                         );
-                        final pendingBalance =
-                            _formatUsd(creator?['pendingBalanceUsd']);
-                        final availableBalance =
-                            _formatUsd(creator?['availableBalanceUsd']);
-                        final availableBalanceValue =
-                          _toDouble(creator?['availableBalanceUsd']);
-                        final lifetime =
-                            _formatUsd(creator?['lifetimeCommissionUsd']);
+                        final pendingBalance = _formatUsd(
+                          creator?['pendingBalanceUsd'],
+                        );
+                        final availableBalance = _formatUsd(
+                          creator?['availableBalanceUsd'],
+                        );
+                        final availableBalanceValue = _toDouble(
+                          creator?['availableBalanceUsd'],
+                        );
+                        final lifetime = _formatUsd(
+                          creator?['lifetimeCommissionUsd'],
+                        );
                         final recurringRate = paidUsers >= 500 ? '25%' : '20%';
 
                         return Column(
@@ -434,12 +435,14 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
-                                onPressed: (availableBalanceValue <= 0 || _code == null)
+                                onPressed:
+                                    (availableBalanceValue <= 0 ||
+                                        _code == null)
                                     ? null
                                     : () => _requestPayout(
-                                          availableBalance: availableBalanceValue,
-                                          creatorCode: _code!,
-                                        ),
+                                        availableBalance: availableBalanceValue,
+                                        creatorCode: _code!,
+                                      ),
                                 icon: _requestingPayout
                                     ? const SizedBox(
                                         width: 16,
@@ -474,7 +477,8 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
                         limit: 20,
                       ),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 12),
                             child: Center(child: CircularProgressIndicator()),
@@ -548,11 +552,12 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: items
-                              .map((item) => _buildCommissionTile(item))
-                              .toList()
-                            ..insert(0, summary)
-                            ..insert(1, const SizedBox(height: 10)),
+                          children:
+                              items
+                                  .map((item) => _buildCommissionTile(item))
+                                  .toList()
+                                ..insert(0, summary)
+                                ..insert(1, const SizedBox(height: 10)),
                         );
                       },
                     ),
@@ -570,7 +575,8 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
                         limit: 20,
                       ),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 12),
                             child: Center(child: CircularProgressIndicator()),
@@ -645,19 +651,20 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: items
-                              .map((item) => _buildPayoutRequestTile(item))
-                              .toList()
-                            ..insert(0, thisMonthCard)
-                            ..insert(1, const SizedBox(height: 10))
-                            ..insert(2, filterRow)
-                            ..insert(3, const SizedBox(height: 10)),
+                          children:
+                              items
+                                  .map((item) => _buildPayoutRequestTile(item))
+                                  .toList()
+                                ..insert(0, thisMonthCard)
+                                ..insert(1, const SizedBox(height: 10))
+                                ..insert(2, filterRow)
+                                ..insert(3, const SizedBox(height: 10)),
                         );
                       },
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Payout policy: $1 initial + 20% recurring, rises to 25% at 500 paid referred subscribers. Commissions confirm after 10 days.',
+                      'Payout policy: \$1 initial + 20% recurring, rises to 25% at 500 paid referred subscribers. Commissions confirm after 10 days.',
                       style: TextStyle(fontSize: 12, color: Colors.white70),
                     ),
                   ],

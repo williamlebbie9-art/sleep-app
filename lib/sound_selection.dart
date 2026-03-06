@@ -18,37 +18,68 @@ class _SoundSelectionScreenState extends State<SoundSelectionScreen> {
     {"name": "Forest", "file": "sounds/forest.mp3"},
   ];
 
-  final List<int> durations = [30, 60, 120, 180, 240, 360, 480];
-  int selectedMinutes = 30;
+  String? _savedSoundPath;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedSound();
+  }
+
+  Future<void> _loadSavedSound() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _savedSoundPath = prefs.getString('lastSound');
+    });
+  }
+
+  Future<void> _startSleepMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final soundPath = prefs.getString('lastSound') ?? 'sounds/rain.mp3';
+    final minutes = prefs.getInt('sleepDurationMinutes') ?? 30;
+
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SleepModeScreen(soundPath: soundPath, minutes: minutes),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Choose a Sleep Sound")),
+      appBar: AppBar(title: const Text('Choose a Sleep Sound')),
       body: Column(
         children: [
           Expanded(
             child: ListView.builder(
               itemCount: sounds.length,
               itemBuilder: (context, index) {
+                final soundPath = sounds[index]['file']!;
+                final isSelected = soundPath == _savedSoundPath;
                 return ListTile(
-                  leading: Icon(Icons.music_note),
-                  title: Text(sounds[index]["name"]!),
+                  leading: const Icon(Icons.music_note),
+                  title: Text(sounds[index]['name']!),
+                  trailing: isSelected
+                      ? const Icon(Icons.check_circle, color: Colors.green)
+                      : null,
                   onTap: () async {
-                    // Save selected sound
                     final prefs = await SharedPreferences.getInstance();
-                    await prefs.setString('lastSound', sounds[index]["file"]!);
+                    await prefs.setString('lastSound', soundPath);
 
                     if (!mounted) return;
 
-                    // Navigate to Sleep Mode
-                    Navigator.push(
-                      this.context,
-                      MaterialPageRoute(
-                        builder: (_) => SleepModeScreen(
-                          soundPath: sounds[index]["file"]!,
-                          minutes: selectedMinutes,
-                        ),
+                    setState(() {
+                      _savedSoundPath = soundPath;
+                    });
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${sounds[index]['name']} selected'),
                       ),
                     );
                   },
@@ -61,54 +92,16 @@ class _SoundSelectionScreenState extends State<SoundSelectionScreen> {
             child: Column(
               children: [
                 const Text(
-                  'Select Duration (minutes)',
-                  style: TextStyle(fontSize: 18),
+                  'Duration is now managed in Sleep Timer.',
+                  style: TextStyle(fontSize: 16),
+                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 10),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: durations.map((minute) {
-                    final isSelected = minute == selectedMinutes;
-                    String label;
-                    switch (minute) {
-                      case 30:
-                        label = "30m";
-                        break;
-                      case 60:
-                        label = "1hr";
-                        break;
-                      case 120:
-                        label = "2hr";
-                        break;
-                      case 180:
-                        label = "3hr";
-                        break;
-                      case 240:
-                        label = "4hr";
-                        break;
-                      case 360:
-                        label = "6hr";
-                        break;
-                      case 480:
-                        label = "8hr";
-                        break;
-                      default:
-                        label = "$minute";
-                    }
-                    return ChoiceChip(
-                      label: Text(label),
-                      selected: isSelected,
-                      onSelected: (selected) {
-                        setState(() {
-                          selectedMinutes = minute;
-                        });
-                      },
-                    );
-                  }).toList(),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _startSleepMode,
+                  child: const Text('Start Sleep Mode'),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 12),
                 ElevatedButton(
                   onPressed: () {
                     Navigator.push(

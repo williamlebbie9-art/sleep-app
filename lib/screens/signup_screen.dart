@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sleeploock/services/auth_service.dart';
 import 'package:sleeploock/services/referral_service.dart';
 import 'signin_screen.dart';
@@ -62,6 +63,28 @@ class _SignUpScreenState extends State<SignUpScreen>
     super.dispose();
   }
 
+  String _friendlyAuthError(Object error) {
+    if (error is FirebaseAuthException) {
+      final code = error.code.toLowerCase();
+      final rawMessage = (error.message ?? '').toLowerCase();
+
+      if (code == 'operation-not-allowed') {
+        return 'Email/Password sign-up is disabled in Firebase Authentication.';
+      }
+
+      if (code == 'invalid-api-key' || code == 'app-not-authorized') {
+        return 'Firebase app configuration is invalid for this build.';
+      }
+
+      if (code == 'project-not-found' ||
+          rawMessage.contains('project') && rawMessage.contains('disabled')) {
+        return 'Firebase project is disabled. Re-enable it in Google Cloud Console for sleeplock-20961.';
+      }
+    }
+
+    return 'Sign-up failed. Please try again.';
+  }
+
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -83,7 +106,7 @@ class _SignUpScreenState extends State<SignUpScreen>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+        ).showSnackBar(SnackBar(content: Text(_friendlyAuthError(e))));
       }
     } finally {
       if (mounted) {
@@ -108,7 +131,7 @@ class _SignUpScreenState extends State<SignUpScreen>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("Google sign-in failed: $e")));
+        ).showSnackBar(SnackBar(content: Text(_friendlyAuthError(e))));
       }
     } finally {
       if (mounted) {
@@ -133,7 +156,7 @@ class _SignUpScreenState extends State<SignUpScreen>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("Apple sign-in failed: $e")));
+        ).showSnackBar(SnackBar(content: Text(_friendlyAuthError(e))));
       }
     } finally {
       if (mounted) {

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'ai_adviser_screen.dart';
 import 'story_list_screen.dart';
 import '../sound_selection.dart';
+import 'sleep_timer_screen.dart';
 import 'activate_sleep_lock_screen.dart';
 import 'ai_checkin_screen.dart';
 import 'bedtime_settings_screen.dart';
@@ -343,9 +344,18 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
             _buildActionCard(
+              'Sleep Timer',
+              Icons.timer,
+              const Color(0xFF4A3BC2),
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SleepTimerScreen()),
+              ),
+            ),
+            _buildActionCard(
               'Sounds',
               Icons.music_note,
-              const Color(0xFF4A3BC2),
+              const Color(0xFF3E319F),
               () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const SoundSelectionScreen()),
@@ -526,15 +536,15 @@ class _DashboardScreenState extends State<DashboardScreen>
           () async {
             final prefs = await SharedPreferences.getInstance();
             final keys = prefs.getKeys().where((k) => k.startsWith('photo_'));
-            final photoPaths = keys
-                .map((k) => prefs.getString(k))
-                .whereType<String>()
-                .toList();
+            final photoEntries = <String, String>{
+              for (final key in keys)
+                if (prefs.getString(key) != null) key: prefs.getString(key)!,
+            };
             if (!mounted) return;
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => StreakGalleryScreen(photoPaths: photoPaths),
+                builder: (_) => StreakGalleryScreen(photoEntries: photoEntries),
               ),
             );
           },

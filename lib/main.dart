@@ -18,6 +18,7 @@ import 'screens/signup_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/bedtime_settings_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/sleep_timer_screen.dart';
 import 'screens/support_screen.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
@@ -358,7 +359,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => SoundSelectionScreen(),
+                    builder: (context) => const SleepTimerScreen(),
                   ),
                 );
               },
