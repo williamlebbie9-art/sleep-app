@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'package:audioplayers/audioplayers.dart';
 import '../models/story.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/background_audio_service.dart';
 
 class StoryReaderScreen extends StatefulWidget {
   final Story sleepstory;
@@ -14,15 +14,12 @@ class StoryReaderScreen extends StatefulWidget {
 }
 
 class _StoryReaderScreenState extends State<StoryReaderScreen> {
-  late AudioPlayer _player;
-  bool isPlaying = false;
+  final BackgroundAudioService _audioService = BackgroundAudioService.instance;
   late bool _audioAvailable;
 
   @override
   void initState() {
     super.initState();
-    _player = AudioPlayer();
-    _player.setReleaseMode(ReleaseMode.loop); // 🔁 LOOP
     _audioAvailable = widget.sleepstory.audioPath.trim().isNotEmpty;
 
     // Save last played story to SharedPreferences
@@ -45,9 +42,9 @@ class _StoryReaderScreenState extends State<StoryReaderScreen> {
       return;
     }
     try {
-      await _player.setReleaseMode(ReleaseMode.loop); // Ensure looping
-      await _player.play(AssetSource(widget.sleepstory.audioPath));
-      setState(() => isPlaying = true);
+      await _audioService.playStory(widget.sleepstory.audioPath);
+      if (!mounted) return;
+      setState(() {});
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Audio file not found or is empty.')),
@@ -56,18 +53,20 @@ class _StoryReaderScreenState extends State<StoryReaderScreen> {
   }
 
   Future<void> _pause() async {
-    await _player.pause();
-    setState(() => isPlaying = false);
-  }
-
-  @override
-  void dispose() {
-    _player.dispose();
-    super.dispose();
+    await _audioService.pause();
+    if (!mounted) return;
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
+    final isPlaying =
+        _audioService.isCurrent(
+          widget.sleepstory.audioPath,
+          BackgroundAudioType.story,
+        ) &&
+        _audioService.isPlaying;
+
     return Scaffold(
       appBar: AppBar(title: Text(widget.sleepstory.title)),
       body: SafeArea(

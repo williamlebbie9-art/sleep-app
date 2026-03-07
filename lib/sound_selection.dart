@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/background_audio_service.dart';
 import 'main.dart';
 import 'screens/story_list_screen.dart';
 
@@ -11,6 +12,8 @@ class SoundSelectionScreen extends StatefulWidget {
 }
 
 class _SoundSelectionScreenState extends State<SoundSelectionScreen> {
+  final BackgroundAudioService _audioService = BackgroundAudioService.instance;
+
   final List<Map<String, String>> sounds = [
     {"name": "Rain", "file": "sounds/rain.mp3"},
     {"name": "Ocean", "file": "sounds/ocean.mp3"},
@@ -39,6 +42,9 @@ class _SoundSelectionScreenState extends State<SoundSelectionScreen> {
     final soundPath = prefs.getString('lastSound') ?? 'sounds/rain.mp3';
     final minutes = prefs.getInt('sleepDurationMinutes') ?? 30;
 
+    // Avoid layering preview audio with sleep mode audio.
+    await _audioService.stop();
+
     if (!mounted) return;
 
     Navigator.push(
@@ -47,6 +53,22 @@ class _SoundSelectionScreenState extends State<SoundSelectionScreen> {
         builder: (_) => SleepModeScreen(soundPath: soundPath, minutes: minutes),
       ),
     );
+  }
+
+  Future<void> _togglePreview(String soundPath) async {
+    final isCurrentSound = _audioService.isCurrent(
+      soundPath,
+      BackgroundAudioType.sound,
+    );
+
+    if (isCurrentSound && _audioService.isPlaying) {
+      await _audioService.pause();
+    } else {
+      await _audioService.playSound(soundPath);
+    }
+
+    if (!mounted) return;
+    setState(() {});
   }
 
   @override
@@ -61,12 +83,30 @@ class _SoundSelectionScreenState extends State<SoundSelectionScreen> {
               itemBuilder: (context, index) {
                 final soundPath = sounds[index]['file']!;
                 final isSelected = soundPath == _savedSoundPath;
+                final isPreviewPlaying =
+                    _audioService.isCurrent(
+                      soundPath,
+                      BackgroundAudioType.sound,
+                    ) &&
+                    _audioService.isPlaying;
                 return ListTile(
                   leading: const Icon(Icons.music_note),
                   title: Text(sounds[index]['name']!),
-                  trailing: isSelected
-                      ? const Icon(Icons.check_circle, color: Colors.green)
-                      : null,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: () => _togglePreview(soundPath),
+                        icon: Icon(
+                          isPreviewPlaying
+                              ? Icons.pause_circle_filled
+                              : Icons.play_circle_fill,
+                        ),
+                      ),
+                      if (isSelected)
+                        const Icon(Icons.check_circle, color: Colors.green),
+                    ],
+                  ),
                   onTap: () async {
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setString('lastSound', soundPath);

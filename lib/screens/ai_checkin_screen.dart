@@ -3,7 +3,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
-import 'lock_active_screen.dart';
 
 class AICheckInScreen extends StatefulWidget {
   const AICheckInScreen({super.key});
@@ -26,7 +25,6 @@ class _AICheckInScreenState extends State<AICheckInScreen> {
     }
   }
 
-  TimeOfDay? sleepTime;
   double tiredness = 3;
 
   String get aiMessage {
@@ -41,10 +39,6 @@ class _AICheckInScreenState extends State<AICheckInScreen> {
 
   Future<void> saveCheckIn() async {
     final prefs = await SharedPreferences.getInstance();
-    if (sleepTime != null) {
-      prefs.setInt('sleepHour', sleepTime!.hour);
-      prefs.setInt('sleepMinute', sleepTime!.minute);
-    }
     prefs.setDouble('tiredness', tiredness);
   }
 
@@ -57,28 +51,6 @@ class _AICheckInScreenState extends State<AICheckInScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "When do you want to sleep?",
-              style: TextStyle(fontSize: 18),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              child: Text(
-                sleepTime == null
-                    ? "Pick sleep time"
-                    : sleepTime!.format(context),
-              ),
-              onPressed: () async {
-                final picked = await showTimePicker(
-                  context: context,
-                  initialTime: TimeOfDay.now(),
-                );
-                if (picked != null) {
-                  setState(() => sleepTime = picked);
-                }
-              },
-            ),
-            const SizedBox(height: 20),
             Row(
               children: [
                 ElevatedButton.icon(
@@ -115,7 +87,7 @@ class _AICheckInScreenState extends State<AICheckInScreen> {
             ),
             const Spacer(),
             ElevatedButton(
-              child: const Text("Continue"),
+              child: const Text("Save Check-In"),
               onPressed: () async {
                 if (_checkInPhoto == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -131,18 +103,11 @@ class _AICheckInScreenState extends State<AICheckInScreen> {
                 final today = DateTime.now();
                 final key = 'photo_${today.year}_${today.month}_${today.day}';
                 prefs.setString(key, _checkInPhoto!.path);
-                // Auto-start lock after check-in
-                final unlockTime = DateTime.now().add(const Duration(hours: 8));
-                final streak = 0; // Or fetch from prefs if needed
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => LockActiveScreen(
-                      unlockTime: unlockTime,
-                      streak: streak,
-                    ),
-                  ),
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Night check-in saved.')),
                 );
+                Navigator.pop(context);
               },
             ),
           ],

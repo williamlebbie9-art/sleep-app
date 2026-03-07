@@ -344,6 +344,15 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
             _buildActionCard(
+              'Night Check-In',
+              Icons.camera_alt,
+              const Color(0xFF5D3EC5),
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AICheckInScreen()),
+              ),
+            ),
+            _buildActionCard(
               'Sleep Timer',
               Icons.timer,
               const Color(0xFF4A3BC2),
