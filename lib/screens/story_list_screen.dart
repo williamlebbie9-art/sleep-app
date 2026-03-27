@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'story_reader_screen.dart';
 import '../models/story.dart';
 import 'paywall_screen.dart';
 
 class StoryListScreen extends StatelessWidget {
   StoryListScreen({Key? key}) : super(key: key);
+
+  static const String _storyHistoryKey = 'storyHistoryTitles';
 
   final List<Story> stories = [
     Story(
@@ -2833,7 +2836,22 @@ Peace moves softly.''',
             trailing: story.premium
                 ? const Icon(Icons.lock, color: Colors.amber)
                 : const Icon(Icons.arrow_forward),
-            onTap: () {
+            onTap: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('lastStoryTitle', story.title);
+              await prefs.setString('lastStoryAudioPath', story.audioPath);
+
+              final history =
+                  prefs.getStringList(_storyHistoryKey) ?? <String>[];
+              history.remove(story.title);
+              history.insert(0, story.title);
+              if (history.length > 10) {
+                history.removeRange(10, history.length);
+              }
+              await prefs.setStringList(_storyHistoryKey, history);
+
+              if (!context.mounted) return;
+
               if (story.premium) {
                 PaywallScreen.show(
                   context: context,

@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/streak_progress_service.dart';
+
 class StreakManager {
   static const _streakKey = 'sleep_streak';
   static const _legacyStreakKey = 'streak';
@@ -82,10 +84,12 @@ class StreakManager {
         await _writeStreak(prefs, streak);
         await prefs.setString(_lastDateKey, now.toIso8601String());
         await _clearRecoveryState(prefs);
+        await StreakProgressService.syncCurrentUserProgress(streak: streak);
         return streak;
       }
       await _writeStreak(prefs, 0);
       await _clearRecoveryState(prefs);
+      await StreakProgressService.syncCurrentUserProgress(streak: 0);
       streak = 0;
     }
 
@@ -98,6 +102,7 @@ class StreakManager {
       final diff = today.difference(lastDate).inDays;
 
       if (diff == 0) {
+        await StreakProgressService.syncCurrentUserProgress(streak: streak);
         return streak;
       }
       if (diff == 1) {
@@ -109,6 +114,7 @@ class StreakManager {
 
     await _writeStreak(prefs, streak);
     await prefs.setString(_lastDateKey, now.toIso8601String());
+    await StreakProgressService.syncCurrentUserProgress(streak: streak);
     return streak;
   }
 
@@ -125,6 +131,7 @@ class StreakManager {
     if (diff.isNegative) {
       await _writeStreak(prefs, 0);
       await _clearRecoveryState(prefs);
+      await StreakProgressService.syncCurrentUserProgress(streak: 0);
       return null;
     }
     return diff;
@@ -154,6 +161,7 @@ class StreakManager {
     await _writeStreak(prefs, streak);
     await prefs.setString(_lastDateKey, today.toIso8601String());
     await _clearRecoveryState(prefs);
+    await StreakProgressService.syncCurrentUserProgress(streak: streak);
 
     return streak;
   }
@@ -163,6 +171,7 @@ class StreakManager {
     final prefs = await SharedPreferences.getInstance();
     await _writeStreak(prefs, 0);
     await _clearRecoveryState(prefs);
+    await StreakProgressService.syncCurrentUserProgress(streak: 0);
   }
 
   static Future<int> getStreak() async {

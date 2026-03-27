@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'ai_adviser_screen.dart';
 import 'story_list_screen.dart';
@@ -9,6 +12,8 @@ import 'ai_checkin_screen.dart';
 import 'bedtime_settings_screen.dart';
 import 'streak_gallery_screen.dart';
 import 'support_screen.dart';
+import 'referral_hub_screen.dart';
+import 'leaderboard_screen.dart';
 import '../utils/streak_manager.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -23,12 +28,26 @@ class _DashboardScreenState extends State<DashboardScreen>
   int _selectedIndex = 0;
   String? _selectedMood;
   int _streak = 0;
+  String? _profilePhotoPath;
+  String? _lastStoryTitle;
+  String? _lastSoundPath;
+  List<String> _storyHistoryTitles = const <String>[];
+  List<String> _soundHistoryPaths = const <String>[];
   late AnimationController _pulseController;
+
+  final ImagePicker _imagePicker = ImagePicker();
+  static const List<Map<String, String>> _availableSounds = [
+    {'name': 'Rain', 'file': 'sounds/rain.mp3'},
+    {'name': 'Ocean', 'file': 'sounds/ocean.mp3'},
+    {'name': 'Piano', 'file': 'sounds/piano.mp3'},
+    {'name': 'Forest', 'file': 'sounds/forest.mp3'},
+  ];
 
   @override
   void initState() {
     super.initState();
     _loadStreak();
+    _loadProfileAndLibraryState();
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -46,40 +65,471 @@ class _DashboardScreenState extends State<DashboardScreen>
     setState(() => _streak = streak);
   }
 
+  Future<void> _loadProfileAndLibraryState() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _profilePhotoPath = prefs.getString('profilePhotoPath');
+      _lastStoryTitle = prefs.getString('lastStoryTitle');
+      _lastSoundPath = prefs.getString('lastSound');
+      _storyHistoryTitles = prefs.getStringList('storyHistoryTitles') ?? [];
+      _soundHistoryPaths = prefs.getStringList('soundHistoryPaths') ?? [];
+    });
+  }
+
+  Future<void> _pickProfilePhoto() async {
+    try {
+      final picked = await _imagePicker.pickImage(source: ImageSource.camera);
+      if (picked == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('profilePhotoPath', picked.path);
+
+      if (!mounted) return;
+      setState(() => _profilePhotoPath = picked.path);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile photo updated.')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Camera unavailable on this device right now.'),
+        ),
+      );
+    }
+  }
+
+  String _soundNameForPath(String? path) {
+    if (path == null || path.isEmpty) return 'Not selected yet';
+    for (final sound in _availableSounds) {
+      if (sound['file'] == path) return sound['name']!;
+    }
+    return path.split('/').last;
+  }
+
+  Widget _buildStoryHistoryCard(String title) {
+    final trimmed = title.trim();
+    final initial = trimmed.isNotEmpty ? trimmed.substring(0, 1) : 'S';
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => StoryListScreen()),
+      ),
+      child: Container(
+        width: 140,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF6C5CE7), Color(0xFF3E319F)],
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: Text(
+                  initial,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ),
+            const Spacer(),
+            Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSoundHistoryCard(String soundPath) {
+    final soundName = _soundNameForPath(soundPath);
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const SoundSelectionScreen()),
+      ),
+      child: Container(
+        width: 140,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF4A3BC2), Color(0xFF1F174D)],
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.music_note,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              soundName,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF1E1B2E), Color(0xFF121018)],
-          ),
+      body: _buildSelectedTab(),
+      bottomNavigationBar: _buildBottomNav(),
+    );
+  }
+
+  Widget _buildSelectedTab() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF1E1B2E), Color(0xFF121018)],
         ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+      ),
+      child: SafeArea(
+        child: IndexedStack(
+          index: _selectedIndex,
+          children: [
+            _buildHomeTab(),
+            _buildStatsTab(),
+            _buildLibraryTab(),
+            _buildProfileTab(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomeTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 20),
+          _buildGreetingSection(),
+          const SizedBox(height: 24),
+          _buildSleepStatsCard(),
+          const SizedBox(height: 24),
+          _buildQuickActionsGrid(),
+          const SizedBox(height: 24),
+          _buildNightCheckIn(),
+          const SizedBox(height: 24),
+          _buildAdditionalFeatures(),
+          const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 20),
+          const Text(
+            'Sleep Stats',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Track your consistency and nightly progress.',
+            style: TextStyle(fontSize: 15, color: Color(0xFFB8B5D1)),
+          ),
+          const SizedBox(height: 20),
+          _buildSleepStatsCard(),
+          const SizedBox(height: 20),
+          _buildFeatureTile(
+            'Open Streak Gallery',
+            'See your recent check-in photos',
+            Icons.photo_library,
+            () async {
+              final prefs = await SharedPreferences.getInstance();
+              final keys = prefs.getKeys().where((k) => k.startsWith('photo_'));
+              final photoEntries = <String, String>{
+                for (final key in keys)
+                  if (prefs.getString(key) != null) key: prefs.getString(key)!,
+              };
+              if (!mounted) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      StreakGalleryScreen(photoEntries: photoEntries),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLibraryTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 20),
+          const Text(
+            'Your Library',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Continue from your latest story and sound.',
+            style: TextStyle(fontSize: 15, color: Color(0xFFB8B5D1)),
+          ),
+          const SizedBox(height: 20),
+          _buildFeatureTile(
+            'Last Story Played',
+            _lastStoryTitle ?? 'No story played yet',
+            Icons.menu_book,
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => StoryListScreen()),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildFeatureTile(
+            'Last Sound Selected',
+            _soundNameForPath(_lastSoundPath),
+            Icons.music_note,
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SoundSelectionScreen()),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Recent Stories',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 120,
+            child: _storyHistoryTitles.isEmpty
+                ? _buildEmptyHistoryHint(
+                    'Start a story and it will appear here.',
+                    Icons.menu_book,
+                  )
+                : ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _storyHistoryTitles.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 10),
+                    itemBuilder: (context, index) =>
+                        _buildStoryHistoryCard(_storyHistoryTitles[index]),
+                  ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Recent Sounds',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 120,
+            child: _soundHistoryPaths.isEmpty
+                ? _buildEmptyHistoryHint(
+                    'Pick a sound and it will appear here.',
+                    Icons.library_music,
+                  )
+                : ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _soundHistoryPaths.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 10),
+                    itemBuilder: (context, index) =>
+                        _buildSoundHistoryCard(_soundHistoryPaths[index]),
+                  ),
+          ),
+          const SizedBox(height: 12),
+          _buildFeatureTile(
+            'Browse Stories',
+            'Open full bedtime story catalog',
+            Icons.auto_stories,
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => StoryListScreen()),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildFeatureTile(
+            'Browse Sounds',
+            'Choose and preview sleep sounds',
+            Icons.library_music,
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SoundSelectionScreen()),
+            ),
+          ),
+          const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyHistoryHint(String text, IconData icon) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF24213A),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFFB8B5D1)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text, style: const TextStyle(color: Color(0xFFB8B5D1))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 20),
+          const Text(
+            'Your Profile',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Personalize your account and creator options.',
+            style: TextStyle(fontSize: 15, color: Color(0xFFB8B5D1)),
+          ),
+          const SizedBox(height: 24),
+          Center(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 20),
-                _buildGreetingSection(),
-                const SizedBox(height: 24),
-                _buildSleepStatsCard(),
-                const SizedBox(height: 24),
-                _buildQuickActionsGrid(),
-                const SizedBox(height: 24),
-                _buildNightCheckIn(),
-                const SizedBox(height: 24),
-                _buildAdditionalFeatures(),
-                const SizedBox(height: 100),
+                CircleAvatar(
+                  radius: 52,
+                  backgroundColor: const Color(0xFF24213A),
+                  backgroundImage:
+                      _profilePhotoPath != null && _profilePhotoPath!.isNotEmpty
+                      ? FileImage(File(_profilePhotoPath!))
+                      : null,
+                  child: _profilePhotoPath == null || _profilePhotoPath!.isEmpty
+                      ? const Icon(
+                          Icons.person,
+                          size: 52,
+                          color: Colors.white70,
+                        )
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: _pickProfilePhoto,
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text('Take Profile Photo'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF7C6CFF),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
               ],
             ),
           ),
-        ),
+          const SizedBox(height: 20),
+          _buildFeatureTile(
+            'Creator Program',
+            'Invite others and track creator payouts',
+            Icons.workspace_premium,
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ReferralHubScreen()),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildFeatureTile(
+            'Help & Support',
+            'Get help and troubleshoot issues',
+            Icons.help_outline,
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SupportScreen()),
+            ),
+          ),
+          const SizedBox(height: 100),
+        ],
       ),
-      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
@@ -370,6 +820,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                 MaterialPageRoute(builder: (_) => const SoundSelectionScreen()),
               ),
             ),
+            _buildActionCard(
+              'Leaderboard',
+              Icons.leaderboard,
+              const Color(0xFF2F5DA8),
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+              ),
+            ),
           ],
         ),
       ],
@@ -560,6 +1019,26 @@ class _DashboardScreenState extends State<DashboardScreen>
         ),
         const SizedBox(height: 12),
         _buildFeatureTile(
+          'Creator Program',
+          'Invite users and earn from referrals',
+          Icons.workspace_premium,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ReferralHubScreen()),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildFeatureTile(
+          'Leaderboard',
+          'See top streaks in the community',
+          Icons.leaderboard,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildFeatureTile(
           'Help & Support',
           'Get help and troubleshoot issues',
           Icons.help_outline,
@@ -661,7 +1140,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildNavItem(IconData icon, String label, int index) {
     final isActive = _selectedIndex == index;
     return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = index),
+      onTap: () {
+        setState(() => _selectedIndex = index);
+        _loadProfileAndLibraryState();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),

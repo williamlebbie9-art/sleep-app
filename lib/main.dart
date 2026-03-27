@@ -6,7 +6,6 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:app_links/app_links.dart';
-import 'sound_selection.dart';
 import 'screens/activate_sleep_lock_screen.dart';
 import 'screens/lock_active_screen.dart';
 import 'screens/story_list_screen.dart';
@@ -30,6 +29,7 @@ import 'models/story.dart';
 import 'screens/story_reader_screen.dart';
 import 'screens/streak_gallery_screen.dart';
 import 'screens/referral_hub_screen.dart';
+import 'screens/leaderboard_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -412,6 +412,19 @@ class _HomeScreenState extends State<HomeScreen> {
               },
               icon: const Icon(Icons.group_add),
               label: const Text('Referral Program'),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const LeaderboardScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.leaderboard),
+              label: const Text('Leaderboard'),
             ),
             const SizedBox(height: 20),
             ElevatedButton(

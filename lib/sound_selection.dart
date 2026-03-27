@@ -13,6 +13,7 @@ class SoundSelectionScreen extends StatefulWidget {
 
 class _SoundSelectionScreenState extends State<SoundSelectionScreen> {
   final BackgroundAudioService _audioService = BackgroundAudioService.instance;
+  static const String _soundHistoryKey = 'soundHistoryPaths';
 
   final List<Map<String, String>> sounds = [
     {"name": "Rain", "file": "sounds/rain.mp3"},
@@ -110,6 +111,15 @@ class _SoundSelectionScreenState extends State<SoundSelectionScreen> {
                   onTap: () async {
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setString('lastSound', soundPath);
+
+                    final history =
+                        prefs.getStringList(_soundHistoryKey) ?? <String>[];
+                    history.remove(soundPath);
+                    history.insert(0, soundPath);
+                    if (history.length > 10) {
+                      history.removeRange(10, history.length);
+                    }
+                    await prefs.setStringList(_soundHistoryKey, history);
 
                     if (!mounted) return;
 

@@ -174,15 +174,30 @@ class AuthService {
       'provider': provider,
       'email': email,
       'displayName': displayName,
+      'username': displayName ?? (email?.split('@').first),
       'photoUrl': user.photoURL,
       'emailVerified': user.emailVerified,
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    await _firestore.collection('users').doc(user.uid).set({
+    final userRef = _firestore.collection('users').doc(user.uid);
+    final existingDoc = await userRef.get();
+
+    await userRef.set({
       ...data,
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+
+    if (!existingDoc.exists) {
+      await userRef.set({
+        'currentStreak': 0,
+        'highestStreak': 0,
+        'rank': 'Beginner',
+        'badge': 'None',
+        'badges': <String>[],
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
 
     await _applyReferralIfProvided(user: user, referralCode: referralCode);
   }
