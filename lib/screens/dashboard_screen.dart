@@ -14,6 +14,7 @@ import 'streak_gallery_screen.dart';
 import 'support_screen.dart';
 import 'referral_hub_screen.dart';
 import 'leaderboard_screen.dart';
+import 'monthly_sleep_memories_screen.dart';
 import '../utils/streak_manager.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -1016,6 +1017,18 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             );
           },
+        ),
+        const SizedBox(height: 12),
+        _buildFeatureTile(
+          'Monthly Sleep Memories',
+          'Relive last month with music',
+          Icons.movie_creation_outlined,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const MonthlySleepMemoriesScreen(),
+            ),
+          ),
         ),
         const SizedBox(height: 12),
         _buildFeatureTile(

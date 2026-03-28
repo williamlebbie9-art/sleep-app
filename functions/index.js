@@ -13,19 +13,49 @@ const db = admin.firestore();
 setGlobalOptions({maxInstances: 10});
 
 /**
- * Converts app chat history to Gemini API content items.
+ * Converts app chat history to OpenAI chat message items.
  * @param {Array<object>} history Incoming chat history.
- * @return {Array<object>} Gemini content array.
+ * @return {Array<object>} OpenAI message array.
  */
 function buildHistoryItems(history) {
   return history
       .filter((item) => item && item.text && item.role)
       .slice(-12)
       .map((item) => {
-        const role = item.role === "assistant" ? "model" : "user";
+        const role = item.role === "assistant" ? "assistant" : "user";
         const text = String(item.text).slice(0, 1000);
-        return {role: role, parts: [{text: text}]};
+        return {role: role, content: text};
       });
+}
+
+const SLEEP_TOPIC_KEYWORDS = [
+  "sleep",
+  "insomnia",
+  "bedtime",
+  "night",
+  "wake",
+  "asleep",
+  "nap",
+  "snore",
+  "tired",
+  "fatigue",
+  "rest",
+  "dream",
+  "circadian",
+  "melatonin",
+  "sleeping",
+  "sleepy",
+  "drowsy",
+  "sleep lock",
+];
+
+/**
+ * @param {string} text
+ * @return {boolean}
+ */
+function isSleepRelated(text) {
+  const normalized = String(text || "").toLowerCase();
+  return SLEEP_TOPIC_KEYWORDS.some((keyword) => normalized.includes(keyword));
 }
 
 exports.sleepCoachChat = onRequest(
@@ -33,7 +63,7 @@ exports.sleepCoachChat = onRequest(
       region: "us-central1",
       timeoutSeconds: 60,
       memory: "256MiB",
-      secrets: ["GEMINI_API_KEY"],
+      secrets: ["OPENAI_API_KEY"],
       cors: true,
     },
     async (request, response) => {
@@ -51,56 +81,65 @@ exports.sleepCoachChat = onRequest(
         return;
       }
 
-      const key = process.env.GEMINI_API_KEY;
+      const key = process.env.OPENAI_API_KEY;
       if (!key) {
-        logger.error("Missing GEMINI_API_KEY secret");
+        logger.error("Missing OPENAI_API_KEY secret");
         response.status(500).json({error: "Server is not configured"});
         return;
       }
 
-      const prefix =
-        "You are SleepLock AI Sleep Coach. Be warm and practical. " +
-        "Give wellness guidance only, not medical diagnosis. " +
+      if (!isSleepRelated(message)) {
+        response.status(200).json({
+          reply:
+            "I can only help with sleep-related questions. " +
+            "Tell me about your bedtime, wake-ups, insomnia, " +
+            "night routine, or daytime sleepiness.",
+        });
+        return;
+      }
+
+      const systemPrompt =
+        "You are SleepLock AI Sleep Coach. " +
+        "Answer only sleep-related questions and politely refuse any " +
+        "non-sleep topic. Be warm, practical, and concise. " +
+        "Give actionable step-by-step sleep guidance. " +
+        "Do not provide medical diagnosis. " +
         "For severe symptoms suggest professional care.";
 
-      const contents = [
-        {role: "user", parts: [{text: prefix}]},
+      const messages = [
+        {role: "system", content: systemPrompt},
       ].concat(buildHistoryItems(history)).concat([
-        {role: "user", parts: [{text: message}]},
+        {role: "user", content: message},
       ]);
 
       try {
         const providerResponse = await fetch(
-            "https://generativelanguage.googleapis.com/v1beta/" +
-            "models/gemini-2.0-flash:generateContent",
+            "https://api.openai.com/v1/chat/completions",
             {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                "x-goog-api-key": key,
+                "Authorization": `Bearer ${key}`,
               },
               body: JSON.stringify({
-                contents: contents,
-                generationConfig: {
-                  temperature: 0.7,
-                  topP: 0.9,
-                  maxOutputTokens: 500,
-                },
+                model: "gpt-4o-mini",
+                messages: messages,
+                temperature: 0.7,
+                max_tokens: 500,
               }),
             },
         );
 
         const data = await providerResponse.json();
         if (!providerResponse.ok) {
-          logger.error("Gemini request failed", data);
+          logger.error("OpenAI request failed", data);
           response.status(502).json({error: "AI provider error"});
           return;
         }
 
-        const candidates = data && data.candidates ? data.candidates : [];
-        const content = candidates[0] && candidates[0].content;
-        const parts = content && content.parts ? content.parts : [];
-        const text = parts[0] && parts[0].text;
+        const choices = data && Array.isArray(data.choices) ? data.choices : [];
+        const text =
+          choices[0] && choices[0].message && choices[0].message.content;
 
         if (!text) {
           response.status(502).json({error: "Empty AI response"});
