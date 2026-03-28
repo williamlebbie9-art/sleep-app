@@ -26,8 +26,8 @@ class PaywallScreen extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      isDismissible: false,
-      enableDrag: false,
+      isDismissible: true,
+      enableDrag: true,
       backgroundColor: Colors.transparent,
       builder: (context) => SizedBox(
         height: MediaQuery.of(context).size.height * 0.92,
@@ -288,32 +288,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
   }
 
   Future<void> _handleCloseAttempt() async {
-    final keepDiscount = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1A1F45),
-          title: const Text(
-            'Wait — your founder discount expires soon.',
-            style: TextStyle(color: Colors.white, fontSize: 18),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Claim My Discount'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Maybe Later'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (keepDiscount == false && mounted) {
-      Navigator.of(context).pop();
-    }
+    if (!mounted) return;
+    Navigator.of(context).pop();
   }
 
   @override
@@ -465,6 +441,28 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   ),
                 ],
                 const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: _isPurchasing ? null : _handleCloseAttempt,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      side: BorderSide(color: Colors.white.withOpacity(0.5)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Start for Free',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
                 Wrap(
                   alignment: WrapAlignment.center,
                   spacing: 8,

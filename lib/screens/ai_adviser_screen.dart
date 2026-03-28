@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'paywall_screen.dart';
 
 class AIAdviserScreen extends StatefulWidget {
   const AIAdviserScreen({super.key});
@@ -13,12 +16,15 @@ class AIAdviserScreen extends StatefulWidget {
 class _AIAdviserScreenState extends State<AIAdviserScreen> {
   static const String _defaultEndpoint =
       'https://us-central1-sleeplock-20961.cloudfunctions.net/sleepCoachChat';
+  static const String _dailyUsagePrefix = 'ai_adviser_daily_count_';
+  static const int _freeDailyLimit = 2;
 
   final List<_ChatEntry> _messages = [];
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
   bool _isSending = false;
+  bool _hasProEntitlement = false;
 
   String get _endpoint {
     const defined = String.fromEnvironment('SLEEP_COACH_ENDPOINT');
@@ -29,6 +35,7 @@ class _AIAdviserScreenState extends State<AIAdviserScreen> {
   @override
   void initState() {
     super.initState();
+    _loadEntitlement();
     _messages.add(
       const _ChatEntry(
         role: _Role.assistant,
@@ -49,6 +56,25 @@ class _AIAdviserScreenState extends State<AIAdviserScreen> {
     final text = _textController.text.trim();
     if (text.isEmpty || _isSending) return;
 
+    if (!_hasProEntitlement) {
+      final usedToday = await _getDailyUsageCount();
+      if (usedToday >= _freeDailyLimit) {
+        if (!mounted) return;
+        setState(() {
+          _messages.add(
+            const _ChatEntry(
+              role: _Role.assistant,
+              text:
+                  'You\'ve reached your 2 free AI chats for today. Upgrade to continue unlimited coaching.',
+            ),
+          );
+        });
+        _scrollToBottom();
+        await _showAiLimitPaywall();
+        return;
+      }
+    }
+
     setState(() {
       _messages.add(_ChatEntry(role: _Role.user, text: text));
       _isSending = true;
@@ -62,6 +88,9 @@ class _AIAdviserScreenState extends State<AIAdviserScreen> {
       setState(() {
         _messages.add(_ChatEntry(role: _Role.assistant, text: reply));
       });
+      if (!_hasProEntitlement) {
+        await _incrementDailyUsageCount();
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -81,6 +110,49 @@ class _AIAdviserScreenState extends State<AIAdviserScreen> {
       }
       _scrollToBottom();
     }
+  }
+
+  Future<void> _loadEntitlement() async {
+    try {
+      final hasEntitlement = await PaywallScreen.hasProEntitlement();
+      if (!mounted) return;
+      setState(() {
+        _hasProEntitlement = hasEntitlement;
+      });
+    } catch (_) {}
+  }
+
+  String _todayUsageKey() {
+    final now = DateTime.now();
+    final yyyy = now.year.toString().padLeft(4, '0');
+    final mm = now.month.toString().padLeft(2, '0');
+    final dd = now.day.toString().padLeft(2, '0');
+    return '$_dailyUsagePrefix$yyyy$mm$dd';
+  }
+
+  Future<int> _getDailyUsageCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_todayUsageKey()) ?? 0;
+  }
+
+  Future<void> _incrementDailyUsageCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = _todayUsageKey();
+    final current = prefs.getInt(key) ?? 0;
+    await prefs.setInt(key, current + 1);
+  }
+
+  Future<void> _showAiLimitPaywall() async {
+    await PaywallScreen.show(
+      context: context,
+      onSuccess: () {
+        if (!mounted) return;
+        setState(() {
+          _hasProEntitlement = true;
+        });
+      },
+    );
+    await _loadEntitlement();
   }
 
   Future<String> _requestCoachReply(String userText) async {
