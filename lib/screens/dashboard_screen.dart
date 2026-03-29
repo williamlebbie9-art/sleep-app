@@ -39,9 +39,13 @@ class _DashboardScreenState extends State<DashboardScreen>
   final ImagePicker _imagePicker = ImagePicker();
   static const List<Map<String, String>> _availableSounds = [
     {'name': 'Rain', 'file': 'sounds/rain.mp3'},
+    {'name': 'Gentle Rain', 'file': 'sounds/gentle-rain-07-437321.mp3'},
     {'name': 'Ocean', 'file': 'sounds/ocean.mp3'},
+    {'name': 'Soothing Ocean Waves', 'file': 'sounds/soothing-ocean-waves.mp3'},
+    {'name': 'Ocean Waves Lite', 'file': 'sounds/ocean-waves-112906 (1).mp3'},
     {'name': 'Piano', 'file': 'sounds/piano.mp3'},
     {'name': 'Forest', 'file': 'sounds/forest.mp3'},
+    {'name': 'Birds', 'file': 'sounds/birds-19624.mp3'},
   ];
 
   @override
