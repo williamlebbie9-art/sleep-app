@@ -28,7 +28,7 @@ function buildHistoryItems(history) {
       });
 }
 
-const SLEEP_TOPIC_KEYWORDS = [
+const WELLNESS_TOPIC_KEYWORDS = [
   "sleep",
   "insomnia",
   "bedtime",
@@ -47,15 +47,34 @@ const SLEEP_TOPIC_KEYWORDS = [
   "sleepy",
   "drowsy",
   "sleep lock",
+  "relax",
+  "relaxation",
+  "calm",
+  "meditate",
+  "meditation",
+  "mindfulness",
+  "breathing",
+  "breath",
+  "stress",
+  "stressed",
+  "anxiety",
+  "anxious",
+  "panic",
+  "overwhelm",
+  "overwhelmed",
+  "worry",
+  "worrying",
 ];
 
 /**
  * @param {string} text
  * @return {boolean}
  */
-function isSleepRelated(text) {
+function isWellnessRelated(text) {
   const normalized = String(text || "").toLowerCase();
-  return SLEEP_TOPIC_KEYWORDS.some((keyword) => normalized.includes(keyword));
+  return WELLNESS_TOPIC_KEYWORDS.some((keyword) =>
+    normalized.includes(keyword),
+  );
 }
 
 exports.sleepCoachChat = onRequest(
@@ -88,23 +107,28 @@ exports.sleepCoachChat = onRequest(
         return;
       }
 
-      if (!isSleepRelated(message)) {
+      if (!isWellnessRelated(message)) {
         response.status(200).json({
           reply:
-            "I can only help with sleep-related questions. " +
-            "Tell me about your bedtime, wake-ups, insomnia, " +
-            "night routine, or daytime sleepiness.",
+            "I can only help with sleep, relaxation, meditation, " +
+            "stress, or anxiety support. " +
+            "Try asking about bedtime routines, calming exercises, " +
+            "or ways to unwind at night.",
         });
         return;
       }
 
       const systemPrompt =
-        "You are SleepLock AI Sleep Coach. " +
-        "Answer only sleep-related questions and politely refuse any " +
-        "non-sleep topic. Be warm, practical, and concise. " +
-        "Give actionable step-by-step sleep guidance. " +
+        "You are SleepLock AI Coach. " +
+        "Help with sleep improvement, relaxation, meditation, " +
+        "stress relief, and mild anxiety support. " +
+        "Politely refuse unrelated topics. " +
+        "Be warm, practical, and concise. " +
+        "Give actionable step-by-step guidance, including short " +
+        "breathing or grounding exercises when helpful. " +
         "Do not provide medical diagnosis. " +
-        "For severe symptoms suggest professional care.";
+        "If symptoms seem severe, persistent, or crisis-related, " +
+        "encourage professional or emergency support.";
 
       const messages = [
         {role: "system", content: systemPrompt},

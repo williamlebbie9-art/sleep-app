@@ -40,7 +40,7 @@ class _AIAdviserScreenState extends State<AIAdviserScreen> {
       const _ChatEntry(
         role: _Role.assistant,
         text:
-            'Hi, I\'m your Sleep Coach 🌙\n\nTell me about your sleep tonight and I\'ll help with a step-by-step plan.',
+            'Hi, I\'m your Sleep Coach 🌙\n\nI can help with sleep, relaxation, meditation, stress, and anxiety support. Tell me how you\'re feeling tonight.',
       ),
     );
   }
