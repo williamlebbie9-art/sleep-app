@@ -453,6 +453,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 } else {
                   await prefs.remove('lockSoundPath');
                 }
+                await prefs.setStringList(
+                  'lockBlockedApps',
+                  selection.blockedApps,
+                );
 
                 // Record sleep time for AI analysis
                 await SleepAIService.recordSleepTime(DateTime.now());

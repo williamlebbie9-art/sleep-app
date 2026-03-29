@@ -148,6 +148,7 @@ class _LockActiveScreenState extends State<LockActiveScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('unlockTime');
     await prefs.remove('lockSoundPath');
+    await prefs.remove('lockBlockedApps');
     await prefs.setBool('lockPlaySound', false);
     await StreakManager.breakStreak();
     await _stopAudio();

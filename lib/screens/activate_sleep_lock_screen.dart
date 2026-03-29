@@ -4,15 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'paywall_screen.dart';
+
 class ActivateSleepLockResult {
   final DateTime unlockTime;
   final bool playSound;
   final String? soundPath;
+  final List<String> blockedApps;
 
   const ActivateSleepLockResult({
     required this.unlockTime,
     required this.playSound,
     required this.soundPath,
+    this.blockedApps = const <String>[],
   });
 }
 
@@ -28,6 +32,18 @@ class _ActivateSleepLockScreenState extends State<ActivateSleepLockScreen> {
   static const MethodChannel _permissionChannel = MethodChannel(
     'sleeploock/lock_permissions',
   );
+  static const int _freeBlockedAppLimit = 2;
+
+  final List<Map<String, String>> _blockableApps = const [
+    {'id': 'youtube', 'name': 'YouTube'},
+    {'id': 'instagram', 'name': 'Instagram'},
+    {'id': 'tiktok', 'name': 'TikTok'},
+    {'id': 'x', 'name': 'X / Twitter'},
+    {'id': 'facebook', 'name': 'Facebook'},
+    {'id': 'snapchat', 'name': 'Snapchat'},
+    {'id': 'reddit', 'name': 'Reddit'},
+    {'id': 'discord', 'name': 'Discord'},
+  ];
 
   final List<Map<String, String>> sounds = [
     {'name': 'Rain', 'file': 'sounds/rain.mp3'},
@@ -42,13 +58,17 @@ class _ActivateSleepLockScreenState extends State<ActivateSleepLockScreen> {
   DateTime selectedEndTime = DateTime.now().add(const Duration(hours: 8));
   bool playSound = true;
   String? selectedSoundPath;
+  final Set<String> _selectedBlockedApps = <String>{};
   bool hasUsageAccessPermission = false;
   bool hasOverlayPermission = false;
+  bool _hasProEntitlement = false;
+  bool _showingBlockedAppsPaywall = false;
 
   @override
   void initState() {
     super.initState();
     _refreshPermissionState();
+    _loadEntitlement();
   }
 
   DateTime get _calculatedUnlockTime {
@@ -132,6 +152,68 @@ class _ActivateSleepLockScreenState extends State<ActivateSleepLockScreen> {
     });
   }
 
+  Future<void> _loadEntitlement() async {
+    try {
+      final hasEntitlement = await PaywallScreen.hasProEntitlement();
+      if (!mounted) return;
+      setState(() {
+        _hasProEntitlement = hasEntitlement;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleBlockedApp(String appId) async {
+    if (_selectedBlockedApps.contains(appId)) {
+      setState(() {
+        _selectedBlockedApps.remove(appId);
+      });
+      return;
+    }
+
+    if (!_hasProEntitlement &&
+        _selectedBlockedApps.length >= _freeBlockedAppLimit) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Free users can block up to 2 apps. Upgrade for unlimited app blocking.',
+          ),
+        ),
+      );
+      await _showBlockedAppsPaywall();
+      return;
+    }
+
+    setState(() {
+      _selectedBlockedApps.add(appId);
+    });
+  }
+
+  Future<void> _showBlockedAppsPaywall() async {
+    if (_showingBlockedAppsPaywall) return;
+    _showingBlockedAppsPaywall = true;
+
+    await PaywallScreen.show(
+      context: context,
+      onSuccess: () {
+        if (!mounted) return;
+        setState(() {
+          _hasProEntitlement = true;
+        });
+      },
+    );
+    await _loadEntitlement();
+
+    if (mounted && !_hasProEntitlement) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You still have the free limit: 2 blocked apps max.'),
+        ),
+      );
+    }
+
+    _showingBlockedAppsPaywall = false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -206,6 +288,39 @@ class _ActivateSleepLockScreenState extends State<ActivateSleepLockScreen> {
                 ),
                 const SizedBox(height: 14),
               ],
+              const Text(
+                'Apps to Block During Sleep Lock',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _hasProEntitlement
+                    ? 'Premium active: block as many apps as you want.'
+                    : 'Free plan: choose up to 2 apps. Selecting more shows the paywall.',
+                style: const TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: _blockableApps.map((app) {
+                  final appId = app['id']!;
+                  final selected = _selectedBlockedApps.contains(appId);
+                  return FilterChip(
+                    selected: selected,
+                    label: Text(app['name']!),
+                    onSelected: (_) {
+                      _toggleBlockedApp(appId);
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Selected: ${_selectedBlockedApps.length}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
               SwitchListTile(
                 title: const Text('Play sound while sleeping'),
                 value: playSound,
@@ -323,6 +438,7 @@ class _ActivateSleepLockScreenState extends State<ActivateSleepLockScreen> {
                       unlockTime: _calculatedUnlockTime,
                       playSound: playSound,
                       soundPath: selectedSoundPath,
+                      blockedApps: _selectedBlockedApps.toList(),
                     ),
                   );
                 },
