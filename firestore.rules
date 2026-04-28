@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(userId);
+    }
+
+    match /creators/{creatorUid} {
+      allow read: if isOwner(creatorUid);
+      allow create, update: if isOwner(creatorUid) &&
+        request.resource.data.uid == request.auth.uid;
+    }
+
+    match /creator_codes/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn() &&
+        request.resource.data.creatorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /commissions/{commissionId} {
+      allow read: if signedIn() && resource.data.creatorUid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /payout_requests/{requestId} {
+      allow read: if signedIn() && resource.data.creatorUid == request.auth.uid;
+      allow create: if signedIn() &&
+        request.resource.data.creatorUid == request.auth.uid &&
+        request.resource.data.creatorCode is string &&
+        request.resource.data.amountUsd is number &&
+        request.resource.data.status == 'pending';
+      allow update, delete: if false;
+    }
+
+    match /support_logs/{logId} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
+  }
+}

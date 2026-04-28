@@ -36,6 +36,18 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
         _code = profile?['code'] as String?;
         _link = profile?['link'] as String?;
       });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _referralService.friendlyErrorMessage(
+              error,
+              action: 'load your Creator Program data',
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -57,9 +69,16 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not activate: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _referralService.friendlyErrorMessage(
+              error,
+              action: 'activate the Creator Program',
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _creating = false);
@@ -170,6 +189,19 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildInlineError(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.redAccent.withOpacity(0.35)),
+      ),
+      child: Text(message, style: const TextStyle(color: Colors.white)),
     );
   }
 
@@ -295,9 +327,16 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Payout request failed: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _referralService.friendlyErrorMessage(
+              error,
+              action: 'create the payout request',
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _requestingPayout = false);
@@ -368,6 +407,15 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
                     StreamBuilder<Map<String, dynamic>?>(
                       stream: _referralService.streamMyCreatorProfile(),
                       builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return _buildInlineError(
+                            _referralService.friendlyErrorMessage(
+                              snapshot.error!,
+                              action: 'load the creator dashboard',
+                            ),
+                          );
+                        }
+
                         final creator = snapshot.data;
                         final paidUsers = _toInt(
                           creator?['referredPaidUsersCount'],
@@ -485,6 +533,15 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
                           );
                         }
 
+                        if (snapshot.hasError) {
+                          return _buildInlineError(
+                            _referralService.friendlyErrorMessage(
+                              snapshot.error!,
+                              action: 'load recent commissions',
+                            ),
+                          );
+                        }
+
                         final items = snapshot.data ?? const [];
                         final thisMonth = items.where(
                           (item) => _isThisMonth(item['createdAt']),
@@ -580,6 +637,15 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 12),
                             child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return _buildInlineError(
+                            _referralService.friendlyErrorMessage(
+                              snapshot.error!,
+                              action: 'load payout requests',
+                            ),
                           );
                         }
 

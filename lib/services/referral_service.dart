@@ -8,6 +8,34 @@ class ReferralService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  String friendlyErrorMessage(
+    Object error, {
+    String action = 'complete this action',
+  }) {
+    if (error is FirebaseException) {
+      final message = (error.message ?? '').toLowerCase();
+
+      if (error.code == 'permission-denied') {
+        return 'Firebase rules are blocking the Creator Program. Deploy the Firestore rules and try again.';
+      }
+
+      if (error.code == 'failed-precondition' && message.contains('index')) {
+        return 'Firebase still needs the Creator Program indexes. Deploy the Firestore indexes and reopen this page.';
+      }
+
+      if (error.code == 'unavailable') {
+        return 'Firebase is temporarily unavailable. Please try again in a moment.';
+      }
+    }
+
+    final raw = error.toString().replaceFirst('Exception: ', '').trim();
+    if (raw.isNotEmpty && raw != 'Exception') {
+      return raw;
+    }
+
+    return 'Could not $action right now. Please try again.';
+  }
+
   Future<Map<String, dynamic>?> getMyCreatorProfile() async {
     final user = _auth.currentUser;
     if (user == null) return null;
@@ -90,65 +118,71 @@ class ReferralService {
   }
 
   Future<String> ensureMyCreatorCode() async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      throw Exception('You need to sign in first.');
-    }
-
-    final existingProfile = await _firestore
-        .collection('creators')
-        .doc(user.uid)
-        .get();
-    if (existingProfile.exists) {
-      final existingCode = existingProfile.data()?['code'] as String?;
-      if (existingCode != null && existingCode.trim().isNotEmpty) {
-        return existingCode;
+    try {
+      final user = _auth.currentUser;
+      if (user == null) {
+        throw Exception('You need to sign in first.');
       }
-    }
 
-    final seed = (user.displayName ?? user.email ?? user.uid)
-        .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
-        .toUpperCase();
-    final base = seed.isEmpty ? 'CREATOR' : seed;
+      final existingProfile = await _firestore
+          .collection('creators')
+          .doc(user.uid)
+          .get();
+      if (existingProfile.exists) {
+        final existingCode = existingProfile.data()?['code'] as String?;
+        if (existingCode != null && existingCode.trim().isNotEmpty) {
+          return existingCode;
+        }
+      }
 
-    for (int attempt = 0; attempt < 20; attempt++) {
-      final suffix = user.uid.substring(0, 4 + (attempt % 4)).toUpperCase();
-      final head = base.substring(0, base.length > 8 ? 8 : base.length);
-      final candidate = _normalizeCode('$head$suffix');
+      final seed = (user.displayName ?? user.email ?? user.uid)
+          .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
+          .toUpperCase();
+      final base = seed.isEmpty ? 'CREATOR' : seed;
 
-      final codeRef = _firestore.collection('creator_codes').doc(candidate);
-      final creatorRef = _firestore.collection('creators').doc(user.uid);
+      for (int attempt = 0; attempt < 20; attempt++) {
+        final suffix = user.uid.substring(0, 4 + (attempt % 4)).toUpperCase();
+        final head = base.substring(0, base.length > 8 ? 8 : base.length);
+        final candidate = _normalizeCode('$head$suffix');
 
-      try {
-        await _firestore.runTransaction((tx) async {
-          final codeSnap = await tx.get(codeRef);
-          if (codeSnap.exists) {
-            throw StateError('collision');
-          }
+        final codeRef = _firestore.collection('creator_codes').doc(candidate);
+        final creatorRef = _firestore.collection('creators').doc(user.uid);
 
-          tx.set(codeRef, {
-            'creatorUid': user.uid,
-            'code': candidate,
-            'createdAt': FieldValue.serverTimestamp(),
+        try {
+          await _firestore.runTransaction((tx) async {
+            final codeSnap = await tx.get(codeRef);
+            if (codeSnap.exists) {
+              throw StateError('collision');
+            }
+
+            tx.set(codeRef, {
+              'creatorUid': user.uid,
+              'code': candidate,
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+
+            tx.set(creatorRef, {
+              'uid': user.uid,
+              'code': candidate,
+              'link': buildReferralLink(candidate),
+              'status': 'active',
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
           });
 
-          tx.set(creatorRef, {
-            'uid': user.uid,
-            'code': candidate,
-            'link': buildReferralLink(candidate),
-            'status': 'active',
-            'createdAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        });
-
-        return candidate;
-      } on StateError {
-        continue;
+          return candidate;
+        } on StateError {
+          continue;
+        }
       }
-    }
 
-    throw Exception('Could not generate a unique creator code. Try again.');
+      throw Exception('Could not generate a unique creator code. Try again.');
+    } on FirebaseException catch (error) {
+      throw Exception(
+        friendlyErrorMessage(error, action: 'save creator data in Firebase'),
+      );
+    }
   }
 
   Future<String?> resolveCreatorUidByCode(String code) async {
@@ -214,37 +248,43 @@ class ReferralService {
     required double amountUsd,
     required String creatorCode,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      throw Exception('You must be signed in to request payout.');
-    }
+    try {
+      final user = _auth.currentUser;
+      if (user == null) {
+        throw Exception('You must be signed in to request payout.');
+      }
 
-    if (amountUsd <= 0) {
-      throw Exception('No available balance to request.');
-    }
+      if (amountUsd <= 0) {
+        throw Exception('No available balance to request.');
+      }
 
-    final pendingQuery = await _firestore
-        .collection('payout_requests')
-        .where('creatorUid', isEqualTo: user.uid)
-        .where('status', isEqualTo: 'pending')
-        .limit(1)
-        .get();
-    if (pendingQuery.docs.isNotEmpty) {
-      throw Exception('You already have a pending payout request.');
-    }
+      final pendingQuery = await _firestore
+          .collection('payout_requests')
+          .where('creatorUid', isEqualTo: user.uid)
+          .where('status', isEqualTo: 'pending')
+          .limit(1)
+          .get();
+      if (pendingQuery.docs.isNotEmpty) {
+        throw Exception('You already have a pending payout request.');
+      }
 
-    final requestRef = _firestore.collection('payout_requests').doc();
-    await requestRef.set({
-      'id': requestRef.id,
-      'creatorUid': user.uid,
-      'creatorCode': creatorCode,
-      'amountUsd': double.parse(amountUsd.toStringAsFixed(2)),
-      'currency': 'USD',
-      'status': 'pending',
-      'requestedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'source': 'creator_dashboard',
-    });
+      final requestRef = _firestore.collection('payout_requests').doc();
+      await requestRef.set({
+        'id': requestRef.id,
+        'creatorUid': user.uid,
+        'creatorCode': creatorCode,
+        'amountUsd': double.parse(amountUsd.toStringAsFixed(2)),
+        'currency': 'USD',
+        'status': 'pending',
+        'requestedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'source': 'creator_dashboard',
+      });
+    } on FirebaseException catch (error) {
+      throw Exception(
+        friendlyErrorMessage(error, action: 'create a payout request'),
+      );
+    }
   }
 
   String _normalizeCode(String value) {

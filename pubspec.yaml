@@ -44,4 +44,5 @@ flutter:
   assets:
     - assets/sounds/
     - assets/audio/stories/
+    - assets/memories/
     - assets/alarm

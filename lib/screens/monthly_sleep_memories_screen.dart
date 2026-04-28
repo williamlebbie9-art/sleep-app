@@ -17,7 +17,7 @@ class MonthlySleepMemoriesScreen extends StatefulWidget {
 
 class _MonthlySleepMemoriesScreenState
     extends State<MonthlySleepMemoriesScreen> {
-  static const String _defaultMusicPath = 'sounds/piano.mp3';
+  static const String _defaultMusicPath = 'memories/the_mountain.mp3';
 
   final AudioPlayer _audioPlayer = AudioPlayer();
   final PageController _pageController = PageController();
@@ -33,6 +33,7 @@ class _MonthlySleepMemoriesScreenState
   @override
   void initState() {
     super.initState();
+    _audioPlayer.setReleaseMode(ReleaseMode.loop);
     _loadMonthlyPhotos();
     _startSlideTimer();
   }
@@ -101,6 +102,15 @@ class _MonthlySleepMemoriesScreenState
       _loading = false;
       _currentPage = 0;
     });
+
+    if (found.isEmpty) {
+      await _audioPlayer.stop();
+      if (!mounted) return;
+      setState(() => _playingMusic = false);
+      return;
+    }
+
+    await _startMusicIfNeeded();
   }
 
   DateTime? _parsePhotoDateFromKey(String key) {
@@ -143,6 +153,16 @@ class _MonthlySleepMemoriesScreenState
     });
   }
 
+  Future<void> _startMusicIfNeeded() async {
+    if (_playingMusic || _photos.isEmpty) {
+      return;
+    }
+
+    await _audioPlayer.play(AssetSource(_defaultMusicPath));
+    if (!mounted) return;
+    setState(() => _playingMusic = true);
+  }
+
   Future<void> _toggleMusic() async {
     if (_playingMusic) {
       await _audioPlayer.pause();
@@ -151,10 +171,7 @@ class _MonthlySleepMemoriesScreenState
       return;
     }
 
-    await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-    await _audioPlayer.play(AssetSource(_defaultMusicPath));
-    if (!mounted) return;
-    setState(() => _playingMusic = true);
+    await _startMusicIfNeeded();
   }
 
   Future<void> _importFromGallery() async {
