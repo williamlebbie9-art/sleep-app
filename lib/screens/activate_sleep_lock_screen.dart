@@ -273,8 +273,8 @@ class _ActivateSleepLockScreenState extends State<ActivateSleepLockScreen> {
                   child: ListTile(
                     title: Text('How lock works on iPhone'),
                     subtitle: Text(
-                      'SleepLock will keep your session active until your timer or end-time completes. '
-                      'For system-wide app restrictions, use iOS Screen Time settings.',
+                      'SleepLock keeps your session active until the timer ends. '
+                      'iOS does not allow app-wide overlay blocking, so use Screen Time for system-level restrictions.',
                     ),
                   ),
                 ),

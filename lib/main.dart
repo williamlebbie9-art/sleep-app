@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -197,6 +199,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const MethodChannel _permissionChannel = MethodChannel(
+    'sleeploock/lock_permissions',
+  );
   final AuthService _authService = AuthService();
   int streak = 0;
   DateTime? unlockTime;
@@ -240,6 +245,32 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<bool> _hasOverlayPermission() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      return await _permissionChannel.invokeMethod<bool>(
+            'checkOverlayPermission',
+          ) ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _startOverlayService() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _permissionChannel.invokeMethod('startOverlayService');
+    } catch (_) {}
+  }
+
+  Future<void> _stopOverlayService() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _permissionChannel.invokeMethod('stopOverlayService');
+    } catch (_) {}
+  }
+
   Future<void> _loadLastStory() async {
     final prefs = await SharedPreferences.getInstance();
     final title = prefs.getString('lastStoryTitle');
@@ -278,6 +309,9 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     // Auto-open lock screen if active
     if (lockActive && unlockTime != null) {
+      if (Platform.isAndroid && await _hasOverlayPermission()) {
+        await _startOverlayService();
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.push(
           context,
@@ -291,6 +325,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       });
+    } else {
+      if (Platform.isAndroid) {
+        await _stopOverlayService();
+      }
     }
   }
 
@@ -460,6 +498,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 // Record sleep time for AI analysis
                 await SleepAIService.recordSleepTime(DateTime.now());
+
+                if (Platform.isAndroid && await _hasOverlayPermission()) {
+                  await _startOverlayService();
+                }
 
                 if (!context.mounted) return;
 

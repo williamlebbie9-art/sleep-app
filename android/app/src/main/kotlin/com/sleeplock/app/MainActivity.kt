@@ -36,6 +36,14 @@ class MainActivity : FlutterActivity() {
 					"checkOverlayPermission" -> {
 						result.success(Settings.canDrawOverlays(this))
 					}
+					"startOverlayService" -> {
+						startService(Intent(this, LockOverlayService::class.java))
+						result.success(true)
+					}
+					"stopOverlayService" -> {
+						stopService(Intent(this, LockOverlayService::class.java))
+						result.success(true)
+					}
 					else -> result.notImplemented()
 				}
 			}

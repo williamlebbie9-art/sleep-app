@@ -27,6 +27,9 @@ class LockActiveScreen extends StatefulWidget {
 }
 
 class _LockActiveScreenState extends State<LockActiveScreen> {
+  static const MethodChannel _permissionChannel = MethodChannel(
+    'sleeploock/lock_permissions',
+  );
   late Timer _timer;
   Duration remaining = Duration.zero;
   AudioPlayer? _player;
@@ -67,7 +70,14 @@ class _LockActiveScreenState extends State<LockActiveScreen> {
     _timer.cancel();
     _stopAudio();
     _stopAlarm();
+    _stopOverlayService();
     super.dispose();
+  }
+
+  Future<void> _stopOverlayService() async {
+    try {
+      await _permissionChannel.invokeMethod('stopOverlayService');
+    } catch (_) {}
   }
 
   Future<void> _startAudioIfNeeded() async {
@@ -152,6 +162,7 @@ class _LockActiveScreenState extends State<LockActiveScreen> {
     await prefs.setBool('lockPlaySound', false);
     await StreakManager.breakStreak();
     await _stopAudio();
+    await _stopOverlayService();
     if (!mounted) return;
     Navigator.pop(context, true);
   }
