@@ -365,7 +365,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     border: Border.all(color: Colors.white24),
                   ),
                   child: const Text(
-                    'All plans include:\n• 7-Day Free Trial\n• Cancel Anytime',
+                    'Monthly and Pro Max include:\n• 7-Day Free Trial\n• Cancel Anytime',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 13,
@@ -377,26 +377,26 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 _buildPlanCard(
                   planName: 'PRO PLAN',
                   badgeLabel: 'Best Value Starter',
-                  todayPrice: '\$3.99 Today',
-                  crossedPrice: '\$7.99',
-                  subtitle: 'First Month Discount.',
+                  todayPrice: '\$7.99 / month',
+                  crossedPrice: '',
+                  subtitle: '',
                   features: const [
                     'AI Sleep Assistant.',
                     'Unlimited Sounds.',
                     'Sleep Tracking.',
                   ],
-                  disclosure:
-                      '7-day free trial, then \$3.99 for the first paid month, then \$7.99/month. Cancel anytime.',
+                  disclosure: 'Billed \$7.99 per month. Cancel anytime.',
                   package: _proStarterPackage,
                   highlighted: false,
+                  buttonLabel: 'Start Free Trial.',
                 ),
                 const SizedBox(height: 14),
                 _buildPlanCard(
                   planName: 'PRO MAX PLAN',
                   badgeLabel: '🔥 MOST POPULAR.',
-                  todayPrice: '\$4.99 Today.',
-                  crossedPrice: '\$9.99.',
-                  subtitle: '',
+                  todayPrice: '\$9.99 / month',
+                  crossedPrice: '',
+                  subtitle: 'Includes 7-day free trial.',
                   features: const [
                     'Advanced AI Guidance.',
                     'Premium Stories Library.',
@@ -404,9 +404,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     'Priority Updates.',
                   ],
                   disclosure:
-                      '7-day free trial, then \$4.99 for the first paid month, then \$9.99/month. Cancel anytime.',
+                      '7-day free trial, then \$9.99/month. Cancel anytime.',
                   package: _proMaxPackage,
                   highlighted: true,
+                  buttonLabel: 'Start Free Trial.',
                 ),
                 const SizedBox(height: 14),
                 _buildPlanCard(
@@ -421,9 +422,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     'Priority AI Access.',
                   ],
                   disclosure:
-                      '7-day free trial, then \$45.99 for the first year, then renews at \$89.99/year unless canceled.',
+                      '\$45.99 for the first year, then renews at \$89.99/year unless canceled.',
                   package: _yearlyPackage,
                   highlighted: false,
+                  buttonLabel: 'Subscribe Now',
                 ),
                 if (_loadingOfferings) ...[
                   const SizedBox(height: 12),
@@ -593,6 +595,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
     required String disclosure,
     required Package? package,
     required bool highlighted,
+    String buttonLabel = 'Start Free Trial.',
   }) {
     final borderColor = highlighted ? const Color(0xFFB784FF) : Colors.white24;
 
@@ -658,18 +661,20 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   fontSize: 24,
                 ),
               ),
-              const SizedBox(width: 10),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  crossedPrice,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.75),
-                    decoration: TextDecoration.lineThrough,
-                    fontSize: 14,
+              if (crossedPrice.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    crossedPrice,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.75),
+                      decoration: TextDecoration.lineThrough,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
           if (subtitle.isNotEmpty) ...[
@@ -716,9 +721,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : const Text(
-                      'Start Free Trial.',
-                      style: TextStyle(
+                  : Text(
+                      buttonLabel,
+                      style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 16,
                       ),
