@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'privacy_policy_screen.dart';
 import 'terms_of_service_screen.dart';
@@ -41,8 +40,6 @@ class PaywallScreen extends StatefulWidget {
 }
 
 class _PaywallScreenState extends State<PaywallScreen> {
-  static const String _offerStartKey = 'founder_offer_started_at_ms';
-
   static const List<String> _starterPlanIds = [
     'pro_starter',
     'starter',
@@ -68,9 +65,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
   Package? _proMaxPackage;
   Package? _yearlyPackage;
 
-  Timer? _countdownTimer;
-  Duration _timeLeft = const Duration(hours: 24);
-
   @override
   void initState() {
     super.initState();
@@ -79,52 +73,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   @override
   void dispose() {
-    _countdownTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _initializePaywall() async {
-    await Future.wait([_loadFounderOfferTimer(), _loadOfferings()]);
-  }
-
-  Future<void> _loadFounderOfferTimer() async {
-    final prefs = await SharedPreferences.getInstance();
-    final now = DateTime.now();
-    final savedStartMs = prefs.getInt(_offerStartKey);
-    final start = savedStartMs != null
-        ? DateTime.fromMillisecondsSinceEpoch(savedStartMs)
-        : now;
-
-    if (savedStartMs == null) {
-      await prefs.setInt(_offerStartKey, start.millisecondsSinceEpoch);
-    }
-
-    final offerEndsAt = start.add(const Duration(hours: 24));
-
-    if (!mounted) return;
-    setState(() {
-      _timeLeft = _remaining(offerEndsAt);
-    });
-
-    _countdownTimer?.cancel();
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() {
-        _timeLeft = _remaining(offerEndsAt);
-      });
-    });
-  }
-
-  Duration _remaining(DateTime end) {
-    final delta = end.difference(DateTime.now());
-    return delta.isNegative ? Duration.zero : delta;
-  }
-
-  String _formatDuration(Duration duration) {
-    final hours = duration.inHours.toString().padLeft(2, '0');
-    final minutes = (duration.inMinutes % 60).toString().padLeft(2, '0');
-    final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
-    return '$hours:$minutes:$seconds';
+    await _loadOfferings();
   }
 
   Future<void> _loadOfferings() async {
@@ -355,8 +308,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                _buildUrgencyTimer(),
-                const SizedBox(height: 18),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -510,40 +461,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildUrgencyTimer() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF5C1A23),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.redAccent.withOpacity(0.8)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '🔥 Founder Launch Offer Ends In:',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _formatDuration(_timeLeft),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.1,
-            ),
-          ),
-        ],
       ),
     );
   }
