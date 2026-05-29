@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/family_controls_service.dart';
 import 'paywall_screen.dart';
 
 class ActivateSleepLockResult {
@@ -68,10 +69,15 @@ class _ActivateSleepLockScreenState extends State<ActivateSleepLockScreen> {
   bool _hasProEntitlement = false;
   bool _showingBlockedAppsPaywall = false;
 
+  bool _familyControlsSupported = false;
+  bool _familyControlsAuthorized = false;
+  int _familyControlAppCount = 0;
+
   @override
   void initState() {
     super.initState();
     _refreshPermissionState();
+    _refreshFamilyControlsState();
     _loadEntitlement();
   }
 
@@ -164,6 +170,83 @@ class _ActivateSleepLockScreenState extends State<ActivateSleepLockScreen> {
         _hasProEntitlement = hasEntitlement;
       });
     } catch (_) {}
+  }
+
+  Future<void> _refreshFamilyControlsState() async {
+    if (!Platform.isIOS) return;
+
+    final supported = await FamilyControlsService.isSupported();
+    final authorized = supported && await FamilyControlsService.isAuthorized();
+    final appCount = authorized
+        ? await FamilyControlsService.getSelectedAppCount()
+        : 0;
+
+    if (!mounted) return;
+    setState(() {
+      _familyControlsSupported = supported;
+      _familyControlsAuthorized = authorized;
+      _familyControlAppCount = appCount;
+    });
+  }
+
+  Future<void> _requestFamilyControlsAuthorization() async {
+    if (!Platform.isIOS) return;
+
+    final success = await FamilyControlsService.requestAuthorization();
+    if (!mounted) return;
+    setState(() {
+      _familyControlsAuthorized = success;
+    });
+
+    if (success) {
+      await _refreshFamilyControlsState();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Screen Time authorization granted.')),
+      );
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Screen Time authorization failed.')),
+      );
+    }
+  }
+
+  Future<void> _pickFamilyControlApps() async {
+    if (!Platform.isIOS) return;
+    if (!_familyControlsAuthorized) {
+      await _requestFamilyControlsAuthorization();
+      if (!_familyControlsAuthorized) return;
+    }
+
+    final selected = await FamilyControlsService.showAppPicker(
+      title: 'Select apps to restrict during Sleep Lock',
+      cancelLabel: 'Cancel',
+      saveLabel: 'Save',
+    );
+
+    if (selected && mounted) {
+      await _refreshFamilyControlsState();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selected apps saved for Family Controls.'),
+        ),
+      );
+    }
+  }
+
+  Future<bool> _enableFamilyRestrictions() async {
+    if (!Platform.isIOS) return false;
+    if (!_familyControlsAuthorized) {
+      await _requestFamilyControlsAuthorization();
+      if (!_familyControlsAuthorized) return false;
+    }
+    final enabled = await FamilyControlsService.enableRestrictions();
+    if (enabled && mounted) {
+      await _refreshFamilyControlsState();
+    }
+    return enabled;
   }
 
   Future<void> _toggleBlockedApp(String appId) async {
@@ -297,33 +380,62 @@ class _ActivateSleepLockScreenState extends State<ActivateSleepLockScreen> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              Text(
-                _hasProEntitlement
-                    ? 'Premium active: block as many apps as you want.'
-                    : 'Free plan: choose up to 2 apps. Selecting more shows the paywall.',
-                style: const TextStyle(color: Colors.white70),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: _blockableApps.map((app) {
-                  final appId = app['id']!;
-                  final selected = _selectedBlockedApps.contains(appId);
-                  return FilterChip(
-                    selected: selected,
-                    label: Text(app['name']!),
-                    onSelected: (_) {
-                      _toggleBlockedApp(appId);
-                    },
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Selected: ${_selectedBlockedApps.length}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
+              if (Platform.isIOS) ...[
+                Text(
+                  _familyControlsSupported
+                      ? (_familyControlsAuthorized
+                            ? 'Selected apps will be restricted using Apple Screen Time.'
+                            : 'Authorize Family Controls to block apps during Sleep Lock.')
+                      : 'Apple Family Controls are only supported on iOS 16+ devices.',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: _familyControlsSupported
+                      ? _pickFamilyControlApps
+                      : null,
+                  child: const Text('Select apps to block'),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Selected app count: $_familyControlAppCount',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                if (!_familyControlsAuthorized)
+                  ElevatedButton(
+                    onPressed: _requestFamilyControlsAuthorization,
+                    child: const Text('Authorize Screen Time'),
+                  ),
+              ] else ...[
+                Text(
+                  _hasProEntitlement
+                      ? 'Premium active: block as many apps as you want.'
+                      : 'Free plan: choose up to 2 apps. Selecting more shows the paywall.',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: _blockableApps.map((app) {
+                    final appId = app['id']!;
+                    final selected = _selectedBlockedApps.contains(appId);
+                    return FilterChip(
+                      selected: selected,
+                      label: Text(app['name']!),
+                      onSelected: (_) {
+                        _toggleBlockedApp(appId);
+                      },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Selected: ${_selectedBlockedApps.length}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
               const SizedBox(height: 12),
               SwitchListTile(
                 title: const Text('Play sound while sleeping'),
@@ -417,9 +529,11 @@ class _ActivateSleepLockScreenState extends State<ActivateSleepLockScreen> {
               ),
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final navigator = Navigator.of(context);
                   if (Platform.isAndroid && !hasUsageAccessPermission) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       const SnackBar(
                         content: Text(
                           'Grant Usage Access permission first in Settings.',
@@ -428,16 +542,61 @@ class _ActivateSleepLockScreenState extends State<ActivateSleepLockScreen> {
                     );
                     return;
                   }
+
+                  if (Platform.isIOS) {
+                    if (!_familyControlsSupported) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Family Controls are supported only on iOS 16+ devices.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (!_familyControlsAuthorized) {
+                      await _requestFamilyControlsAuthorization();
+                      if (!_familyControlsAuthorized) {
+                        return;
+                      }
+                    }
+
+                    if (_familyControlAppCount == 0) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Please select apps to block before activating Sleep Lock.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
+                    final enabled = await _enableFamilyRestrictions();
+                    if (!enabled) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Could not enable Screen Time restrictions. Please try again.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+                  }
+
                   if (playSound && selectedSoundPath == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       const SnackBar(
                         content: Text('Pick a sound or disable sound.'),
                       ),
                     );
                     return;
                   }
-                  Navigator.pop(
-                    context,
+
+                  if (!mounted) return;
+                  navigator.pop(
                     ActivateSleepLockResult(
                       unlockTime: _calculatedUnlockTime,
                       playSound: playSound,

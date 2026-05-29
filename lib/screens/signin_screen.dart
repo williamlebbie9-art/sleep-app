@@ -5,7 +5,7 @@ import 'dart:io';
 
 class SignInScreen extends StatefulWidget {
   final VoidCallback? onSignInComplete;
-  
+
   const SignInScreen({super.key, this.onSignInComplete});
 
   @override
@@ -183,22 +183,24 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                if (!_isLoading) ...[
-                  ElevatedButton.icon(
-                    onPressed: _handleGoogleSignIn,
-                    icon: const Icon(Icons.g_mobiledata, size: 32),
-                    label: const Text('Continue with Google'),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 50),
-                    ),
+                ElevatedButton.icon(
+                  onPressed: _isLoading ? null : _handleGoogleSignIn,
+                  icon: const Icon(Icons.g_mobiledata, size: 32),
+                  label: const Text('Continue with Google'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 50),
                   ),
-                  const SizedBox(height: 16),
-                  if (Platform.isIOS)
-                    SignInWithAppleButton(
-                      onPressed: _handleAppleSignIn,
-                      height: 50,
-                    ),
-                ],
+                ),
+                const SizedBox(height: 16),
+                if (Platform.isIOS)
+                  SignInWithAppleButton(
+                    onPressed: _isLoading
+                        ? () {}
+                        : () {
+                            _handleAppleSignIn();
+                          },
+                    height: 50,
+                  ),
               ],
             ),
           ),

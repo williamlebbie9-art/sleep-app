@@ -418,7 +418,6 @@ class _SignUpScreenState extends State<SignUpScreen>
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                fullscreenDialog: true,
                                 builder: (context) => SignInScreen(
                                   onSignInComplete: widget.onSignUpComplete,
                                 ),
