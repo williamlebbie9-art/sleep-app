@@ -4,6 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ReferralService {
   static const _pendingReferralCodeKey = 'pending_referral_code';
+  static const List<String> payoutMethods = [
+    'PayPal',
+    'Airtm',
+    'Visa',
+    'Debit Card',
+  ];
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -100,6 +106,106 @@ class ReferralService {
           (query) =>
               query.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList(),
         );
+  }
+
+  Stream<List<Map<String, dynamic>>> streamAllPayoutRequests({int limit = 50}) {
+    return _firestore
+        .collection('payout_requests')
+        .orderBy('requestedAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map(
+          (query) =>
+              query.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList(),
+        );
+  }
+
+  Future<void> updatePayoutRequestStatus({
+    required String requestId,
+    required String status,
+    String? adminNote,
+  }) async {
+    try {
+      if (status != 'paid' && status != 'rejected') {
+        throw Exception('Invalid payout status.');
+      }
+
+      final user = _auth.currentUser;
+      if (user == null) {
+        throw Exception('You must be signed in to update payout requests.');
+      }
+
+      final requestRef = _firestore
+          .collection('payout_requests')
+          .doc(requestId);
+      await _firestore.runTransaction((tx) async {
+        final requestSnap = await tx.get(requestRef);
+        if (!requestSnap.exists) {
+          throw Exception('Payout request not found.');
+        }
+
+        final requestData = requestSnap.data() ?? {};
+        final currentStatus = (requestData['status'] ?? '')
+            .toString()
+            .toLowerCase();
+        if (currentStatus != 'pending') {
+          throw Exception('Only pending payout requests can be updated.');
+        }
+
+        final amountUsd =
+            double.tryParse(requestData['amountUsd']?.toString() ?? '') ?? 0;
+        if (amountUsd <= 0) {
+          throw Exception('Payout request has an invalid amount.');
+        }
+
+        final creatorUid = (requestData['creatorUid'] ?? '').toString().trim();
+        if (creatorUid.isEmpty) {
+          throw Exception('Payout request is missing creator information.');
+        }
+
+        final now = FieldValue.serverTimestamp();
+        final updatePayload = {
+          'status': status,
+          'updatedAt': now,
+          'processedBy': user.uid,
+          if (adminNote != null && adminNote.trim().isNotEmpty)
+            'adminNote': adminNote.trim(),
+          if (status == 'paid') 'paidAt': now,
+          if (status == 'rejected') 'rejectedAt': now,
+        };
+
+        tx.update(requestRef, updatePayload);
+
+        if (status == 'paid') {
+          final creatorRef = _firestore.collection('creators').doc(creatorUid);
+          final creatorSnap = await tx.get(creatorRef);
+          if (!creatorSnap.exists) {
+            throw Exception('Creator record not found.');
+          }
+
+          final creatorData = creatorSnap.data() ?? {};
+          final availableBalanceUsd =
+              double.tryParse(
+                creatorData['availableBalanceUsd']?.toString() ?? '',
+              ) ??
+              0;
+          if (availableBalanceUsd < amountUsd) {
+            throw Exception('Creator does not have enough available balance.');
+          }
+
+          tx.set(creatorRef, {
+            'availableBalanceUsd': FieldValue.increment(-amountUsd),
+            'paidOutBalanceUsd': FieldValue.increment(amountUsd),
+            'lastPayoutAt': now,
+            'updatedAt': now,
+          }, SetOptions(merge: true));
+        }
+      });
+    } on FirebaseException catch (error) {
+      throw Exception(
+        friendlyErrorMessage(error, action: 'update payout request'),
+      );
+    }
   }
 
   Future<bool> creatorCodeExists(String code) async {
@@ -244,9 +350,40 @@ class ReferralService {
     return true;
   }
 
+  Future<void> setMyPayoutMethod({
+    required String payoutMethod,
+    required String payoutDetails,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw Exception('You must be signed in to save payout settings.');
+    }
+
+    if (payoutMethod.trim().isEmpty) {
+      throw Exception('Please select a payout method.');
+    }
+    if (payoutDetails.trim().isEmpty) {
+      throw Exception('Please provide your payout details.');
+    }
+
+    try {
+      await _firestore.collection('creators').doc(user.uid).set({
+        'payoutMethod': payoutMethod.trim(),
+        'payoutDetails': payoutDetails.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } on FirebaseException catch (error) {
+      throw Exception(
+        friendlyErrorMessage(error, action: 'save your payout settings'),
+      );
+    }
+  }
+
   Future<void> createPayoutRequest({
     required double amountUsd,
     required String creatorCode,
+    required String payoutMethod,
+    required String payoutDetails,
   }) async {
     try {
       final user = _auth.currentUser;
@@ -256,6 +393,18 @@ class ReferralService {
 
       if (amountUsd <= 0) {
         throw Exception('No available balance to request.');
+      }
+
+      if (payoutMethod.trim().isEmpty) {
+        throw Exception(
+          'Please select a payout method before requesting payout.',
+        );
+      }
+
+      if (payoutDetails.trim().isEmpty) {
+        throw Exception(
+          'Please provide payout details before requesting payout.',
+        );
       }
 
       final pendingQuery = await _firestore
@@ -269,16 +418,26 @@ class ReferralService {
       }
 
       final requestRef = _firestore.collection('payout_requests').doc();
-      await requestRef.set({
-        'id': requestRef.id,
-        'creatorUid': user.uid,
-        'creatorCode': creatorCode,
-        'amountUsd': double.parse(amountUsd.toStringAsFixed(2)),
-        'currency': 'USD',
-        'status': 'pending',
-        'requestedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'source': 'creator_dashboard',
+      await _firestore.runTransaction((tx) async {
+        tx.set(requestRef, {
+          'id': requestRef.id,
+          'creatorUid': user.uid,
+          'creatorCode': creatorCode,
+          'amountUsd': double.parse(amountUsd.toStringAsFixed(2)),
+          'currency': 'USD',
+          'status': 'pending',
+          'requestedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'source': 'creator_dashboard',
+          'payoutMethod': payoutMethod.trim(),
+          'payoutDetails': payoutDetails.trim(),
+        });
+
+        tx.set(_firestore.collection('creators').doc(user.uid), {
+          'payoutMethod': payoutMethod.trim(),
+          'payoutDetails': payoutDetails.trim(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       });
     } on FirebaseException catch (error) {
       throw Exception(

@@ -2,8 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'ai_adviser_screen.dart';
+import 'admin_payout_screen.dart';
 import 'story_list_screen.dart';
 import '../sound_selection.dart';
 import 'sleep_timer_screen.dart';
@@ -37,6 +39,17 @@ class _DashboardScreenState extends State<DashboardScreen>
   late AnimationController _pulseController;
 
   final ImagePicker _imagePicker = ImagePicker();
+  static const List<String> _adminEmailSuffixes = [
+    '@sleeplock.app',
+    '@sleeploock.app',
+    '@sleeplockteam.com',
+  ];
+
+  static bool _isAdminEmail(String email) {
+    final lowerEmail = email.toLowerCase().trim();
+    return _adminEmailSuffixes.any((suffix) => lowerEmail.endsWith(suffix));
+  }
+
   static const List<Map<String, String>> _availableSounds = [
     {'name': 'Rain', 'file': 'sounds/rain.mp3'},
     {'name': 'Gentle Rain', 'file': 'sounds/gentle-rain-07-437321.mp3'},
@@ -523,6 +536,19 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
           const SizedBox(height: 12),
+          if (FirebaseAuth.instance.currentUser?.email != null &&
+              _isAdminEmail(FirebaseAuth.instance.currentUser!.email!)) ...[
+            _buildFeatureTile(
+              'Admin Payouts',
+              'Review and mark creator payout requests as paid or rejected.',
+              Icons.admin_panel_settings,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminPayoutScreen()),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           _buildFeatureTile(
             'Help & Support',
             'Get help and troubleshoot issues',

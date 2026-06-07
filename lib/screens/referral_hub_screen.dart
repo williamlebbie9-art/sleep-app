@@ -19,12 +19,49 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
   bool _requestingPayout = false;
   String? _code;
   String? _link;
+  String? _selectedPayoutMethod;
+  final TextEditingController _payoutDetailsController =
+      TextEditingController();
+  bool _payoutDetailsDirty = false;
+  bool _payoutMethodDirty = false;
+  bool _savingPayoutMethod = false;
   String _payoutFilter = 'all';
 
   @override
   void initState() {
     super.initState();
+    _payoutDetailsController.addListener(() {
+      if (!_payoutDetailsDirty) {
+        setState(() => _payoutDetailsDirty = true);
+      }
+    });
     _load();
+  }
+
+  @override
+  void dispose() {
+    _payoutDetailsController.dispose();
+    super.dispose();
+  }
+
+  void _syncPayoutSettingsFromProfile(Map<String, dynamic>? creator) {
+    final profileMethod = creator?['payoutMethod'] as String?;
+    final profileDetails = creator?['payoutDetails'] as String? ?? '';
+
+    if (!_payoutMethodDirty && profileMethod != _selectedPayoutMethod) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _selectedPayoutMethod = profileMethod);
+      });
+    }
+
+    if (!_payoutDetailsDirty &&
+        _payoutDetailsController.text != profileDetails) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _payoutDetailsController.text = profileDetails;
+      });
+    }
   }
 
   Future<void> _load() async {
@@ -92,6 +129,75 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('$label copied.')));
+  }
+
+  String _payoutDetailsHint(String? method) {
+    switch (method) {
+      case 'PayPal':
+        return 'PayPal email or account identifier';
+      case 'Airtm':
+        return 'Airtm email or wallet name';
+      case 'Visa':
+        return 'Visa card nickname or last 4 digits';
+      case 'Debit Card':
+        return 'Debit card nickname or last 4 digits';
+      default:
+        return 'Enter your payout account details';
+    }
+  }
+
+  Future<void> _savePayoutSettings() async {
+    if (_selectedPayoutMethod == null ||
+        _selectedPayoutMethod!.trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a payout method first.')),
+      );
+      return;
+    }
+
+    final details = _payoutDetailsController.text.trim();
+    if (details.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter payout details for your selected method.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _savingPayoutMethod = true);
+    try {
+      await _referralService.setMyPayoutMethod(
+        payoutMethod: _selectedPayoutMethod!,
+        payoutDetails: details,
+      );
+      if (!mounted) return;
+      setState(() {
+        _payoutDetailsDirty = false;
+        _payoutMethodDirty = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Payout settings saved.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _referralService.friendlyErrorMessage(
+              error,
+              action: 'save payout settings',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _savingPayoutMethod = false);
+      }
+    }
   }
 
   double _toDouble(dynamic value) {
@@ -253,6 +359,7 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
     final amount = _formatUsd(item['amountUsd']);
     final status = (item['status'] ?? 'pending').toString().toLowerCase();
     final requestedAt = _formatCreatedAt(item['requestedAt']);
+    final payoutMethod = (item['payoutMethod'] ?? '').toString();
 
     final Color statusColor;
     final IconData statusIcon;
@@ -290,6 +397,11 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
                   'Payout Request',
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
+                if (payoutMethod.isNotEmpty)
+                  Text(
+                    payoutMethod,
+                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
                 Text(
                   '$requestedAt • ${status.toUpperCase()}',
                   style: const TextStyle(fontSize: 12, color: Colors.white70),
@@ -311,11 +423,39 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
       return;
     }
 
+    if (_selectedPayoutMethod == null ||
+        _selectedPayoutMethod!.trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please select a payout method before requesting payment.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final payoutDetails = _payoutDetailsController.text.trim();
+    if (payoutDetails.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please enter your payout details before requesting payment.',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() => _requestingPayout = true);
     try {
       await _referralService.createPayoutRequest(
         amountUsd: availableBalance,
         creatorCode: creatorCode,
+        payoutMethod: _selectedPayoutMethod!,
+        payoutDetails: payoutDetails,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -417,6 +557,7 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
                         }
 
                         final creator = snapshot.data;
+                        _syncPayoutSettingsFromProfile(creator);
                         final paidUsers = _toInt(
                           creator?['referredPaidUsersCount'],
                         );
@@ -478,6 +619,98 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
                               recurringRate,
                               icon: Icons.trending_up,
                               color: Colors.purpleAccent,
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: Colors.white.withOpacity(0.04),
+                                border: Border.all(color: Colors.white24),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Payout Method',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: ReferralService.payoutMethods.map(
+                                      (method) {
+                                        return ChoiceChip(
+                                          label: Text(method),
+                                          selected:
+                                              _selectedPayoutMethod == method,
+                                          onSelected: (selected) {
+                                            if (selected) {
+                                              setState(() {
+                                                _selectedPayoutMethod = method;
+                                                _payoutMethodDirty = true;
+                                              });
+                                            }
+                                          },
+                                        );
+                                      },
+                                    ).toList(),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: _payoutDetailsController,
+                                    onChanged: (_) {
+                                      if (!_payoutDetailsDirty) {
+                                        setState(
+                                          () => _payoutDetailsDirty = true,
+                                        );
+                                      }
+                                    },
+                                    decoration: InputDecoration(
+                                      labelText: 'Payment account details',
+                                      hintText: _payoutDetailsHint(
+                                        _selectedPayoutMethod,
+                                      ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.white10,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton(
+                                      onPressed: _savingPayoutMethod
+                                          ? null
+                                          : _savePayoutSettings,
+                                      child: _savingPayoutMethod
+                                          ? const SizedBox(
+                                              height: 16,
+                                              width: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Text('Save payout settings'),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    'Pick PayPal, Airtm, Visa, or Debit Card, then enter the account, email, or last 4 digits for payout coordination.',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                             const SizedBox(height: 12),
                             SizedBox(
