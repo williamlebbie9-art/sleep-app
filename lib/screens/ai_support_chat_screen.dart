@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/ai_support_service.dart';
+import '../utils/ai_chat_usage_manager.dart';
+import 'paywall_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AISupportChatScreen extends StatefulWidget {
@@ -15,10 +17,12 @@ class _AISupportChatScreenState extends State<AISupportChatScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _isTyping = false;
+  bool _hasProEntitlement = false;
 
   @override
   void initState() {
     super.initState();
+    _checkProEntitlement();
     _addBotMessage(
       "Hi! I'm your AI Support Assistant 🤖\n\n"
       "I can help you with:\n"
@@ -29,6 +33,15 @@ class _AISupportChatScreenState extends State<AISupportChatScreen> {
       "• App troubleshooting\n\n"
       "What can I help you with today?",
     );
+  }
+
+  Future<void> _checkProEntitlement() async {
+    final hasEntitlement = await PaywallScreen.hasProEntitlement();
+    if (mounted) {
+      setState(() {
+        _hasProEntitlement = hasEntitlement;
+      });
+    }
   }
 
   @override
@@ -68,11 +81,56 @@ class _AISupportChatScreenState extends State<AISupportChatScreen> {
     });
   }
 
+  Future<bool> _proEntitlementOrPrompt() async {
+    if (_hasProEntitlement) return true;
+
+    // Check chat limit
+    final canChat = await AIChatUsageManager.instance.canSendChat();
+    if (canChat) return true;
+
+    // Show paywall
+    if (!mounted) return false;
+    await PaywallScreen.show(
+      context: context,
+      onSuccess: () {
+        if (!mounted) return;
+        setState(() {
+          _hasProEntitlement = true;
+        });
+      },
+    );
+    await _checkProEntitlement();
+    return _hasProEntitlement;
+  }
+
   Future<void> _handleSubmit(String text) async {
     if (text.trim().isEmpty) return;
 
+    // Enforce free tier limit
+    final canProceed = await _proEntitlementOrPrompt();
+    if (!canProceed) {
+      if (mounted) {
+        final remaining = await AIChatUsageManager.instance.getRemainingChats();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'You have $remaining free AI chats remaining this month. '
+              'Upgrade to Premium for unlimited access.',
+            ),
+            backgroundColor: Colors.amber.shade800,
+          ),
+        );
+      }
+      return;
+    }
+
     _textController.clear();
     _addUserMessage(text);
+
+    // Increment chat count for free users
+    if (!_hasProEntitlement) {
+      await AIChatUsageManager.instance.incrementChatCount();
+    }
 
     setState(() => _isTyping = true);
 
@@ -170,9 +228,29 @@ class _AISupportChatScreenState extends State<AISupportChatScreen> {
               },
             ),
           ),
+          if (!_hasProEntitlement) _buildChatLimitBanner(),
           if (_isTyping) _buildTypingIndicator(),
           _buildQuickActions(),
           _buildInputField(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatLimitBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Colors.amber.withOpacity(0.15),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, color: Colors.amber, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Free tier: ${AIChatUsageManager.maxFreeChats} chats/month',
+              style: const TextStyle(color: Colors.amber, fontSize: 12),
+            ),
+          ),
         ],
       ),
     );

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 import '../models/story.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,6 +22,9 @@ class _StoryReaderScreenState extends State<StoryReaderScreen> {
   late bool _audioAvailable;
   bool _hasProEntitlement = false;
   bool _showingStoryPaywall = false;
+  StreamSubscription<Duration>? _positionSubscription;
+  Duration? _audioDuration;
+  bool _audioStoppedAtMidpoint = false;
 
   @override
   void initState() {
@@ -34,6 +39,7 @@ class _StoryReaderScreenState extends State<StoryReaderScreen> {
 
   @override
   void dispose() {
+    _positionSubscription?.cancel();
     _storyScrollController
       ..removeListener(_handleStoryScroll)
       ..dispose();
@@ -41,6 +47,23 @@ class _StoryReaderScreenState extends State<StoryReaderScreen> {
   }
 
   bool get _shouldGateAtMidpoint => !_hasProEntitlement;
+
+  /// Returns the character index where the midpoint of the story is.
+  int get _storyMidpointIndex {
+    final content = widget.sleepstory.content;
+    if (content.isEmpty) return 0;
+    return (content.length * 0.5).round();
+  }
+
+  /// Returns the first half of the story text.
+  String get _firstHalfContent {
+    return widget.sleepstory.content.substring(0, _storyMidpointIndex);
+  }
+
+  /// Returns the second half of the story text.
+  String get _secondHalfContent {
+    return widget.sleepstory.content.substring(_storyMidpointIndex);
+  }
 
   Future<void> _loadEntitlement() async {
     try {
@@ -70,6 +93,13 @@ class _StoryReaderScreenState extends State<StoryReaderScreen> {
 
   Future<void> _showStoryMidpointPaywall() async {
     if (_showingStoryPaywall) return;
+
+    // Stop audio if playing
+    if (_audioService.isPlaying) {
+      await _audioService.stop();
+      _audioStoppedAtMidpoint = true;
+      if (mounted) setState(() {});
+    }
 
     _showingStoryPaywall = true;
     await PaywallScreen.show(
@@ -110,15 +140,48 @@ class _StoryReaderScreenState extends State<StoryReaderScreen> {
       ).showSnackBar(const SnackBar(content: Text('Audio coming soon.')));
       return;
     }
+
+    // Reset the stopped-at-midpoint flag on new play
+    _audioStoppedAtMidpoint = false;
+
     try {
       await _audioService.playStory(widget.sleepstory.audioPath);
       if (!mounted) return;
       setState(() {});
+
+      // Subscribe to position to stop at halfway point
+      _startMidpointAudioTracking();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Audio file not found or is empty.')),
       );
     }
+  }
+
+  void _startMidpointAudioTracking() {
+    _positionSubscription?.cancel();
+
+    final player = _audioService.getAudioPlayer();
+
+    // Get audio duration
+    player.onDurationChanged.listen((duration) {
+      _audioDuration = duration;
+    });
+
+    // Track position
+    _positionSubscription = player.onPositionChanged.listen((position) {
+      if (!_shouldGateAtMidpoint || _audioDuration == null) return;
+      if (_audioStoppedAtMidpoint) return;
+
+      final midPoint = _audioDuration! * 0.5;
+      if (position >= midPoint) {
+        // Stop the audio and show paywall
+        _audioService.stop();
+        _audioStoppedAtMidpoint = true;
+        if (mounted) setState(() {});
+        _showStoryMidpointPaywall();
+      }
+    });
   }
 
   Future<void> _pause() async {
@@ -145,9 +208,25 @@ class _StoryReaderScreenState extends State<StoryReaderScreen> {
               child: SingleChildScrollView(
                 controller: _storyScrollController,
                 padding: const EdgeInsets.all(20),
-                child: Text(
-                  widget.sleepstory.content,
-                  style: const TextStyle(fontSize: 16, height: 1.5),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // First half - always visible
+                    Text(
+                      _firstHalfContent,
+                      style: const TextStyle(fontSize: 16, height: 1.5),
+                    ),
+                    // Second half - hidden for free users
+                    if (!_hasProEntitlement) ...[
+                      const SizedBox(height: 24),
+                      _buildMidpointPaywallOverlay(),
+                    ] else ...[
+                      Text(
+                        _secondHalfContent,
+                        style: const TextStyle(fontSize: 16, height: 1.5),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
@@ -182,6 +261,18 @@ class _StoryReaderScreenState extends State<StoryReaderScreen> {
               child: _audioAvailable
                   ? Column(
                       children: [
+                        if (_audioStoppedAtMidpoint && !_hasProEntitlement)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              'Audio stopped at midpoint. Upgrade to continue listening.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.amber.shade700,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
                         IconButton(
                           iconSize: 72,
                           icon: Icon(
@@ -198,6 +289,57 @@ class _StoryReaderScreenState extends State<StoryReaderScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMidpointPaywallOverlay() {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.lock_outline, size: 48, color: Colors.amber.shade300),
+          const SizedBox(height: 16),
+          const Text(
+            'Story Continues Here',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'The rest of this story is for Premium members.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade400),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _showStoryMidpointPaywall,
+              icon: const Icon(Icons.star, color: Colors.white),
+              label: const Text(
+                'Unlock Full Story',
+                style: TextStyle(color: Colors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber.shade700,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

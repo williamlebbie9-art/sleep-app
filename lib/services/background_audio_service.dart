@@ -16,6 +16,9 @@ class BackgroundAudioService {
   String? get currentAssetPath => _currentAssetPath;
   BackgroundAudioType? get currentType => _currentType;
 
+  /// Exposes the internal AudioPlayer for direct position/duration tracking.
+  AudioPlayer getAudioPlayer() => _player;
+
   Stream<PlayerState> get playerStateStream => _player.onPlayerStateChanged;
 
   bool isCurrent(String assetPath, BackgroundAudioType type) {
