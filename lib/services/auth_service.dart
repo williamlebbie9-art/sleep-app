@@ -236,6 +236,13 @@ class AuthService {
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
+    await _referralService.recordReferralConversion(
+      creatorUid: creatorUid,
+      creatorCode: normalized,
+      userUid: user.uid,
+      userEmail: user.email,
+    );
+
     await _referralService.clearPendingReferralCode();
   }
 }

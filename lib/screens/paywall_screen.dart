@@ -17,21 +17,29 @@ class PaywallScreen extends StatefulWidget {
     return info.entitlements.all[entitlementId]?.isActive == true;
   }
 
-  static Future<void> show({
+  static Future<bool?> show({
     required BuildContext context,
     required VoidCallback onSuccess,
   }) {
-    return showModalBottomSheet(
+    return showGeneralDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      isDismissible: true,
-      enableDrag: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => SizedBox(
-        height: MediaQuery.of(context).size.height * 0.92,
-        child: PaywallScreen(onSuccess: onSuccess),
-      ),
+      barrierDismissible: true,
+      barrierLabel: 'Paywall',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return PaywallScreen(onSuccess: onSuccess);
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final offsetAnimation = Tween<Offset>(
+          begin: const Offset(1.0, 0.0),
+          end: Offset.zero,
+        ).animate(
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+        );
+
+        return SlideTransition(position: offsetAnimation, child: child);
+      },
     );
   }
 
@@ -259,7 +267,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
             end: Alignment.bottomCenter,
             colors: [Color(0xFF0D1028), Color(0xFF1A1F45), Color(0xFF231F4D)],
           ),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.zero,
         ),
         child: SafeArea(
           child: SingleChildScrollView(

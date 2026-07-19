@@ -11,8 +11,8 @@ class ReferralService {
     'Debit Card',
   ];
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
+  FirebaseAuth get _auth => FirebaseAuth.instance;
 
   String friendlyErrorMessage(
     Object error, {
@@ -348,6 +348,34 @@ class ReferralService {
     }
     await setPendingReferralCode(code);
     return true;
+  }
+
+  Future<void> recordReferralConversion({
+    required String creatorUid,
+    required String creatorCode,
+    required String userUid,
+    String? userEmail,
+  }) async {
+    final referralRef = _firestore.collection('referrals').doc();
+    await _firestore.runTransaction((tx) async {
+      tx.set(referralRef, {
+        'creatorUid': creatorUid,
+        'creatorCode': creatorCode,
+        'refereeUid': userUid,
+        'refereeEmail': userEmail,
+        'source': 'auth_signup',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      tx.set(
+        _firestore.collection('creators').doc(creatorUid),
+        {
+          'referralCount': FieldValue.increment(1),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    });
   }
 
   Future<void> setMyPayoutMethod({
