@@ -36,14 +36,18 @@ import 'screens/leaderboard_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  // Use the Apple-specific RevenueCat API key for iOS/macOS, fallback to the test key for others
-  const String revenueCatIosKey = 'appl_SUdwTQXurFSxYGqCBVgMCZMmAXv';
-  const String revenueCatDefaultKey = 'test_JKbvYVuKwWsjygXSVAOkpVmWjTa';
-  final String purchasesApiKey = (Platform.isIOS || Platform.isMacOS)
-      ? revenueCatIosKey
-      : revenueCatDefaultKey;
 
-  await Purchases.configure(PurchasesConfiguration(purchasesApiKey));
+  const String revenueCatApiKey = String.fromEnvironment(
+    'REVENUECAT_API_KEY',
+    defaultValue: '',
+  );
+
+  if (revenueCatApiKey.isNotEmpty) {
+    await Purchases.configure(PurchasesConfiguration(revenueCatApiKey));
+  } else {
+    debugPrint('RevenueCat API key not provided; skipping initialization.');
+  }
+
   await NotificationService().initialize();
   runApp(const SleepLockApp());
 }

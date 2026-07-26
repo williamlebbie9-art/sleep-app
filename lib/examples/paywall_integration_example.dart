@@ -18,21 +18,18 @@ Future<void> initializeRevenueCat() async {
     LogLevel.debug,
   ); // Use LogLevel.info in production
 
-  // Configure RevenueCat with platform-specific API keys
-  PurchasesConfiguration configuration;
+  // Configure RevenueCat with a build-time API key from the app's environment.
+  const String revenueCatApiKey = String.fromEnvironment(
+    'REVENUECAT_API_KEY',
+    defaultValue: '',
+  );
 
-  if (defaultTargetPlatform == TargetPlatform.android) {
-    // Google Play Store API key
-    configuration = PurchasesConfiguration('test_JKbvYVuKwWsjygXSVAOkpVmWjTa');
-  } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-    // App Store API key
-    configuration = PurchasesConfiguration('test_JKbvYVuKwWsjygXSVAOkpVmWjTa');
-  } else {
-    // Fallback for unsupported platforms
-    throw UnsupportedError('Platform not supported');
+  if (revenueCatApiKey.isEmpty) {
+    debugPrint('RevenueCat API key not provided; skipping initialization.');
+    return;
   }
 
-  await Purchases.configure(configuration);
+  await Purchases.configure(PurchasesConfiguration(revenueCatApiKey));
 }
 
 // Example main.dart integration:
@@ -259,7 +256,7 @@ REQUIRED SETUP IN REVENUECAT DASHBOARD:
    - Verify purchases work and entitlements unlock
 
 IMPORTANT NOTES:
-- API key configured: test_JKbvYVuKwWsjygXSVAOkpVmWjTa
+- Provide a RevenueCat API key at build time with REVENUECAT_API_KEY
 - Make sure entitlement is named exactly "premium" (case-sensitive)
 - Test on real devices, not just emulators
 - Enable App Store/Play Store testing before production release
