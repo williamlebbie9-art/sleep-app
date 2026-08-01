@@ -38,9 +38,13 @@ class AuthService {
         );
       }
 
-      // Link RevenueCat to Firebase user
+      // Link RevenueCat to Firebase user (guarded - RevenueCat may not be configured)
       if (userCredential.user != null) {
-        await Purchases.logIn(userCredential.user!.uid);
+        try {
+          await Purchases.logIn(userCredential.user!.uid);
+        } catch (_) {
+          // RevenueCat not configured or unavailable; sign-in should still succeed.
+        }
       }
 
       return userCredential;
@@ -94,9 +98,13 @@ class AuthService {
         );
       }
 
-      // Link RevenueCat to Firebase user
+      // Link RevenueCat to Firebase user (guarded - RevenueCat may not be configured)
       if (userCredential.user != null) {
-        await Purchases.logIn(userCredential.user!.uid);
+        try {
+          await Purchases.logIn(userCredential.user!.uid);
+        } catch (_) {
+          // RevenueCat not configured or unavailable; sign-in should still succeed.
+        }
       }
 
       return userCredential;
@@ -116,7 +124,11 @@ class AuthService {
     );
 
     if (userCredential.user != null) {
-      await Purchases.logIn(userCredential.user!.uid);
+      try {
+        await Purchases.logIn(userCredential.user!.uid);
+      } catch (_) {
+        // RevenueCat not configured or unavailable; sign-up should still succeed.
+      }
       await _upsertUserProfile(
         userCredential.user!,
         provider: 'email',
@@ -137,7 +149,11 @@ class AuthService {
     );
 
     if (userCredential.user != null) {
-      await Purchases.logIn(userCredential.user!.uid);
+      try {
+        await Purchases.logIn(userCredential.user!.uid);
+      } catch (_) {
+        // RevenueCat not configured or unavailable; sign-in should still succeed.
+      }
     }
 
     return userCredential;
@@ -146,7 +162,11 @@ class AuthService {
   Future<void> signOut() async {
     await _googleSignIn.signOut();
     await _auth.signOut();
-    await Purchases.logOut();
+    try {
+      await Purchases.logOut();
+    } catch (_) {
+      // RevenueCat not configured or unavailable; sign-out should still succeed.
+    }
   }
 
   Future<void> _upsertUserProfile(

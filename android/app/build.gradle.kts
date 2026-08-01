@@ -9,7 +9,8 @@ plugins {
 android {
     namespace = "com.sleeplock.app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // Use the installed NDK 29.0.14206865 (28.2.13676358 is corrupted/missing source.properties)
+    ndkVersion = "29.0.14206865"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
