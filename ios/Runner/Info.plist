@@ -53,6 +53,12 @@
 				<string>sleeplock</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.1062562913801-96lf7gv687b0b1amvlpv5p3pdgu8lmvt</string>
+			</array>
+		</dict>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>This app needs access to your local network to provide better connectivity.</string>

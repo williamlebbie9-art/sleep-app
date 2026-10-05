@@ -1,0 +1,59 @@
+workflows:
+  ios-testflight:
+    name: SleepLock iOS TestFlight
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    integrations:
+      # Rename this value if your App Store Connect integration has another name in Codemagic.
+      app_store_connect: codemagic
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.william.sleeplock
+      vars:
+        APP_BUNDLE_ID: com.william.sleeplock
+        EXPECTED_FIREBASE_PROJECT_ID: sleeplock-20961
+        XCODE_WORKSPACE: ios/Runner.xcworkspace
+        XCODE_SCHEME: Runner
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Verify iOS Firebase configuration
+        script: |
+          set -e
+          FIREBASE_PLIST="ios/Runner/GoogleService-Info.plist"
+          INFO_PLIST="ios/Runner/Info.plist"
+          test -f "$FIREBASE_PLIST"
+          test -f "$INFO_PLIST"
+
+          FIREBASE_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :BUNDLE_ID' "$FIREBASE_PLIST")
+          FIREBASE_PROJECT_ID_FROM_PLIST=$(/usr/libexec/PlistBuddy -c 'Print :PROJECT_ID' "$FIREBASE_PLIST")
+          FIREBASE_APP_ID=$(/usr/libexec/PlistBuddy -c 'Print :GOOGLE_APP_ID' "$FIREBASE_PLIST")
+          REVERSED_CLIENT_ID=$(/usr/libexec/PlistBuddy -c 'Print :REVERSED_CLIENT_ID' "$FIREBASE_PLIST")
+
+          test "$FIREBASE_BUNDLE_ID" = "${APP_BUNDLE_ID}"
+          test "$FIREBASE_PROJECT_ID_FROM_PLIST" = "${FIREBASE_PROJECT_ID}"
+          test -n "$FIREBASE_APP_ID"
+          test -n "$REVERSED_CLIENT_ID"
+          grep -q "$REVERSED_CLIENT_ID" "$INFO_PLIST"
+          echo "Firebase config validation passed for $FIREBASE_BUNDLE_ID"
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Install CocoaPods
+        script: cd ios && pod install
+      - name: Apply iOS signing profiles
+        script: xcode-project use-profiles
+      - name: Build signed IPA
+        script: |
+          flutter build ipa --release \
+            --build-number="$PROJECT_BUILD_NUMBER" \
+            --dart-define="REVENUECAT_API_KEY=${REVENUECAT_API_KEY:-}" \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
