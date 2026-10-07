@@ -98,7 +98,9 @@ class _PaywallScreenPremiumState extends State<PaywallScreenPremium> {
     setState(() => _isPurchasing = true);
 
     try {
-      final purchaseResult = await Purchases.purchasePackage(_selectedPackage!);
+      final purchaseResult = await Purchases.purchase(
+        PurchaseParams.package(_selectedPackage!),
+      );
       final customerInfo = purchaseResult.customerInfo;
 
       // Check if premium entitlement is now active

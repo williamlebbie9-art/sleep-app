@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import '../screens/paywall_screen_premium.dart';
 
@@ -74,18 +73,23 @@ class PremiumFeatureExample extends StatelessWidget {
   const PremiumFeatureExample({super.key});
 
   Future<void> _onFeatureTapped(BuildContext context) async {
+    final currentContext = context;
+    if (!currentContext.mounted) return;
+
     // Check if user has premium access
     final hasPremium = await PaywallScreenPremium.hasPremiumEntitlement();
 
     if (hasPremium) {
+      if (!currentContext.mounted) return;
       // Allow access to premium feature
       Navigator.push(
-        context,
+        currentContext,
         MaterialPageRoute(builder: (_) => const PremiumFeatureScreen()),
       );
     } else {
+      if (!currentContext.mounted) return;
       // Show paywall
-      await PaywallScreenPremium.show(context);
+      await PaywallScreenPremium.show(currentContext);
     }
   }
 

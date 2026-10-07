@@ -300,7 +300,12 @@ class _EndSleepScreenState extends State<EndSleepScreen> {
         );
         return;
       }
-      await Purchases.purchaseStoreProduct(products.first);
+      final purchaseResult = await Purchases.purchase(
+        PurchaseParams.storeProduct(products.first),
+      );
+      if (purchaseResult.customerInfo.entitlements.active.isEmpty && !mounted) {
+        return;
+      }
       if (!mounted) return;
       Navigator.pop(context, true);
     } on PlatformException catch (e) {

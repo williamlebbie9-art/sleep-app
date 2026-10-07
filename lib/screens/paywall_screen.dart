@@ -31,12 +31,13 @@ class PaywallScreen extends StatefulWidget {
         return PaywallScreen(onSuccess: onSuccess);
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final offsetAnimation = Tween<Offset>(
-          begin: const Offset(1.0, 0.0),
-          end: Offset.zero,
-        ).animate(
-          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-        );
+        final offsetAnimation =
+            Tween<Offset>(
+              begin: const Offset(1.0, 0.0),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            );
 
         return SlideTransition(position: offsetAnimation, child: child);
       },
@@ -183,7 +184,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
     });
 
     try {
-      final purchaseResult = await Purchases.purchasePackage(package);
+      final purchaseResult = await Purchases.purchase(
+        PurchaseParams.package(package),
+      );
       final entitlements = purchaseResult.customerInfo.entitlements.active;
 
       if (entitlements.isNotEmpty) {

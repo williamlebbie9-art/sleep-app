@@ -84,12 +84,15 @@ class _AISupportChatScreenState extends State<AISupportChatScreen> {
   Future<bool> _proEntitlementOrPrompt() async {
     if (_hasProEntitlement) return true;
 
+    final messenger = ScaffoldMessenger.maybeOf(context);
+
     // Check chat limit
     final canChat = await AIChatUsageManager.instance.canSendChat();
     if (canChat) return true;
 
-    // Show paywall
     if (!mounted) return false;
+
+    // Show paywall
     await PaywallScreen.show(
       context: context,
       onSuccess: () {
@@ -99,7 +102,18 @@ class _AISupportChatScreenState extends State<AISupportChatScreen> {
         });
       },
     );
+
+    if (!mounted) return false;
     await _checkProEntitlement();
+
+    if (!_hasProEntitlement && messenger != null) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Premium is required to continue this chat.'),
+        ),
+      );
+    }
+
     return _hasProEntitlement;
   }
 
