@@ -138,6 +138,7 @@ class _InitialRouteScreenState extends State<InitialRouteScreen> {
   }
 
   void _onSignInComplete() {
+    if (!mounted) return;
     setState(() {
       _isAuthenticated = true;
       _paywallPromptCompleted = false;
@@ -151,27 +152,30 @@ class _InitialRouteScreenState extends State<InitialRouteScreen> {
   }
 
   Future<void> _presentPostSignupPaywall() async {
+    if (!mounted) return;
     if (_isShowingPaywall || _paywallPromptCompleted || !_isAuthenticated) {
       return;
     }
 
     _isShowingPaywall = true;
 
-    await PaywallScreen.show(
-      context: context,
-      onSuccess: () {
-        if (!mounted) return;
+    try {
+      await PaywallScreen.show(
+        context: context,
+        onSuccess: () {
+          if (!mounted) return;
+          setState(() {
+            _paywallPromptCompleted = true;
+          });
+        },
+      );
+    } finally {
+      if (mounted) {
         setState(() {
           _paywallPromptCompleted = true;
+          _isShowingPaywall = false;
         });
-      },
-    );
-
-    if (mounted) {
-      setState(() {
-        _paywallPromptCompleted = true;
-        _isShowingPaywall = false;
-      });
+      }
     }
   }
 

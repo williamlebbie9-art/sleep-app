@@ -67,13 +67,21 @@ class AuthService {
         ],
       );
 
+      final idToken = appleCredential.identityToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw Exception('Apple Sign-In returned no identity token.');
+      }
+
       final oAuthProvider = OAuthProvider('apple.com');
       final credential = oAuthProvider.credential(
-        idToken: appleCredential.identityToken,
+        idToken: idToken,
         accessToken: appleCredential.authorizationCode,
       );
 
       final userCredential = await _auth.signInWithCredential(credential);
+      if (userCredential.user == null) {
+        throw Exception('Apple Sign-In completed without a Firebase user.');
+      }
 
       if (userCredential.user != null) {
         String? fullName;
