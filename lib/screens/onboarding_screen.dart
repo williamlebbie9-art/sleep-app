@@ -45,8 +45,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (!mounted) return;
     if (widget.onComplete != null) {
       widget.onComplete!();
-    } else {
-      Navigator.pop(context);
+      return;
+    }
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
     }
   }
 

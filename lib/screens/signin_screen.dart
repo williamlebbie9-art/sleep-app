@@ -40,10 +40,9 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!mounted) return;
       if (widget.onSignInComplete != null) {
         widget.onSignInComplete!();
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        }
-      } else if (Navigator.of(context).canPop()) {
+        return;
+      }
+      if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
     } catch (e) {
@@ -63,10 +62,9 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!mounted) return;
       if (widget.onSignInComplete != null) {
         widget.onSignInComplete!();
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        }
-      } else if (Navigator.of(context).canPop()) {
+        return;
+      }
+      if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
     } catch (e) {

@@ -99,7 +99,9 @@ class _SignUpScreenState extends State<SignUpScreen>
       if (!mounted) return;
       if (widget.onSignUpComplete != null) {
         widget.onSignUpComplete!();
-      } else if (Navigator.of(context).canPop()) {
+        return;
+      }
+      if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
     } catch (e) {
@@ -126,7 +128,9 @@ class _SignUpScreenState extends State<SignUpScreen>
         widget.onSignUpComplete!();
         return;
       }
-      Navigator.pop(context);
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -151,7 +155,9 @@ class _SignUpScreenState extends State<SignUpScreen>
         widget.onSignUpComplete!();
         return;
       }
-      Navigator.pop(context);
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
