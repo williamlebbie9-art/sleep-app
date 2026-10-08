@@ -89,6 +89,7 @@ class _InitialRouteScreenState extends State<InitialRouteScreen> {
   bool _onboardingComplete = false;
   bool _paywallPromptCompleted = true;
   bool _isShowingPaywall = false;
+  bool _paywallTriggered = false;
 
   @override
   void initState() {
@@ -142,6 +143,7 @@ class _InitialRouteScreenState extends State<InitialRouteScreen> {
     setState(() {
       _isAuthenticated = true;
       _paywallPromptCompleted = false;
+      _paywallTriggered = false;
     });
   }
 
@@ -194,9 +196,15 @@ class _InitialRouteScreenState extends State<InitialRouteScreen> {
     }
 
     if (!_paywallPromptCompleted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _presentPostSignupPaywall();
-      });
+      if (!_paywallTriggered) {
+        _paywallTriggered = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _isShowingPaywall || !_isAuthenticated) {
+            return;
+          }
+          _presentPostSignupPaywall();
+        });
+      }
 
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }

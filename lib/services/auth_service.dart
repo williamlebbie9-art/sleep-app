@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -7,13 +8,32 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 import 'referral_service.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  FirebaseAuth? _auth;
+  FirebaseFirestore? _firestore;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
   final ReferralService _referralService = ReferralService();
 
-  User? get currentUser => _auth.currentUser;
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  FirebaseAuth get _firebaseAuth {
+    _auth ??= FirebaseAuth.instance;
+    return _auth!;
+  }
+
+  FirebaseFirestore get _firebaseFirestore {
+    _firestore ??= FirebaseFirestore.instance;
+    return _firestore!;
+  }
+
+  bool get isFirebaseReady => Firebase.apps.isNotEmpty;
+
+  User? get currentUser {
+    if (!isFirebaseReady) return null;
+    return _firebaseAuth.currentUser;
+  }
+
+  Stream<User?> get authStateChanges {
+    if (!isFirebaseReady) return const Stream.empty();
+    return _firebaseAuth.authStateChanges();
+  }
 
   Future<UserCredential?> signInWithGoogle({String? referralCode}) async {
     try {
@@ -28,7 +48,9 @@ class AuthService {
         idToken: googleAuth.idToken,
       );
 
-      final userCredential = await _auth.signInWithCredential(credential);
+      final userCredential = await _requireAuth().signInWithCredential(
+        credential,
+      );
 
       if (userCredential.user != null) {
         await _upsertUserProfile(
@@ -78,7 +100,9 @@ class AuthService {
         accessToken: appleCredential.authorizationCode,
       );
 
-      final userCredential = await _auth.signInWithCredential(credential);
+      final userCredential = await _requireAuth().signInWithCredential(
+        credential,
+      );
       if (userCredential.user == null) {
         throw Exception('Apple Sign-In completed without a Firebase user.');
       }
@@ -126,7 +150,7 @@ class AuthService {
     required String password,
     String? referralCode,
   }) async {
-    final userCredential = await _auth.createUserWithEmailAndPassword(
+    final userCredential = await _requireAuth().createUserWithEmailAndPassword(
       email: email,
       password: password,
     );
@@ -151,7 +175,7 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    final userCredential = await _auth.signInWithEmailAndPassword(
+    final userCredential = await _requireAuth().signInWithEmailAndPassword(
       email: email,
       password: password,
     );
@@ -169,7 +193,7 @@ class AuthService {
 
   Future<void> signOut() async {
     await _googleSignIn.signOut();
-    await _auth.signOut();
+    if (isFirebaseReady) await _firebaseAuth.signOut();
     try {
       await Purchases.logOut();
     } catch (_) {
@@ -208,7 +232,7 @@ class AuthService {
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    final userRef = _firestore.collection('users').doc(user.uid);
+    final userRef = _firebaseFirestore.collection('users').doc(user.uid);
     final existingDoc = await userRef.get();
 
     await userRef.set({
@@ -230,6 +254,17 @@ class AuthService {
     await _applyReferralIfProvided(user: user, referralCode: referralCode);
   }
 
+  FirebaseAuth _requireAuth() {
+    if (!isFirebaseReady) {
+      throw FirebaseException(
+        plugin: 'firebase_auth',
+        code: 'firebase-not-initialized',
+        message: 'Firebase has not been initialized.',
+      );
+    }
+    return _firebaseAuth;
+  }
+
   Future<void> _applyReferralIfProvided({
     required User user,
     String? referralCode,
@@ -240,7 +275,7 @@ class AuthService {
       return;
     }
 
-    final userRef = _firestore.collection('users').doc(user.uid);
+    final userRef = _firebaseFirestore.collection('users').doc(user.uid);
     final userDoc = await userRef.get();
     final existingCode = userDoc.data()?['referredByCreatorCode'] as String?;
     if (existingCode != null && existingCode.trim().isNotEmpty) {
